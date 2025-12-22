@@ -978,10 +978,209 @@ Azure AI Search supports approximate nearest neighbor search, hybrid search comb
 
 # **C) What is Azure AI Search**
 
+So with this video, let's discuss how we can implement retrieval augmented generation (RAG) with Azure AI Search. We’ll look at using Azure AI Search as both a native vector storage option and an information retrieval solution.
+
+What exactly is Azure AI Search? Azure AI Search results contain only your data, which can include text inferred or extracted from images, as well as entities and key phrases through text analytics. A key capability of Azure AI Search is that you can feed unstructured documents—PDFs, Word documents, text files, PowerPoint presentations, Excel sheets, and more. Even if these documents include images, Azure Search indexes all of that information. It can handle multimodal data, meaning both text and images. Azure Search extracts images, generates captions, extracts key phrases, references to organizations, locations, and more.
+
+Regarding data sources, Azure AI Search supports bringing in data in JSON format or via auto crawling from locations such as OneLake storage, Fabric, Blob Storage, and even Azure Cosmos DB. This gives you flexibility to ingest data from various structured or unstructured sources.
+
+For search and analysis, Azure AI Search supports vector search, full-text search, and hybrid search. Hybrid search combines keyword matching with vector search, providing more relevant results for user queries.
+
+In terms of AI enrichment, Azure Search utilizes an Azure AI resource in the backend. This is a multi-service AI resource that supports computer vision, language analysis, text recognition, linguistic analysis, and more. It supports 56 languages and features like phonetic matching.
+
+Queries in Azure Search use Lucene syntax, similar to SQL queries. You can use this for searching text, performing autocomplete, or geo-filtering. The service also supports scaling, role-based access control, managed identities, and key management with Azure Key Vault. It integrates with Azure Machine Learning, Azure AI, and Azure OpenAI, which is particularly relevant when using RAG.
+
+The workflow in Azure AI Search starts with defining your data source. An indexer chunks the data from your documents and sends it to a skill set. The skill set connects to your Azure AI resource to perform AI enrichment—analyzing text, generating captions, and extracting information. The enriched output is sent back to the indexer, which maps the data as key-value pairs into an index. This index allows the data to be queried efficiently using Lucene syntax.
+
+So the three main components of Azure AI Search are:
+
+Indexer – breaks documents into chunks and sends data to the skill set.
+
+Skill set – performs AI enrichment like text analysis and image analysis.
+
+Index – stores the structured output to be queried.
+
+To implement RAG using Azure AI Search with a vector embedding engine in Azure OpenAI, the flow works as follows: Data is ingested into Azure AI Search, which sends it to the skill set. The skill set calls the vector embedding engine to generate embeddings, then returns them to the indexer. The indexer maps the embeddings and other data into the index.
+
+When a user query comes in, it is vectorized using the vector embedding engine. The query performs a vector similarity search (or hybrid search) on the index, retrieving the most relevant documents. This contextual information is then sent as a prompt to a GPT engine, which generates a response. The response is returned to the user.
+
+In this RAG flow, Azure AI Search acts as both a vector storage solution and an intelligent AI toolset, combining capabilities like text and image analysis with vector search functionality.
+
+That’s the end of the video—this explains how to implement retrieval augmented generation using Azure AI Search.
+
 # **D) Introduction to Multi-Modal RAG in Azure AI Search**
+
+Alright, so back I am with yet another exciting module to the course. This one is pretty awesome as it focuses on the latest advancements in the Azure OpenAI world and the Azure AI Foundry ecosystem in general. We will also explore some very interesting use cases. By now, you’ve probably guessed what we are going to cover—multi-modal RAG. This module will demonstrate how to leverage all the capabilities of Azure AI Foundry to build a multi-modal RAG pipeline.
+
+Previously, we focused on building a RAG-based chatbot that analyzed text, whether structured or unstructured. But what if your information is hidden within images or structured documents? For example, documents containing tables where the layout matters, bounding boxes that define where the text resides, and the need for precise context for your LLM, along with proper citations. That’s exactly what this module will cover.
+
+Let’s start with a scenario to understand multi-modal RAG better. Imagine you are a software engineer or AI developer at Contoso Pharma, a global pharmaceutical firm. Compliance officers need to answer audit questions using evidence from PDFs (regulatory documents, safety reports), images (drug labels, scanned approvals), tables (clinical trial results), Excel sheets (structured data), and internal notes or emails. Previously, these tasks were time-consuming, error-prone, and often incomplete. The challenge here is to build a chatbot capable of handling structured, unstructured, and semi-structured data, such as text, images, and tables, to provide accurate answers.
+
+A simple text-based RAG pipeline isn’t enough in this case. Some text could be embedded in images, or the images themselves might provide valuable insights. Multi-modal RAG solves this by allowing you to combine all types of content. In the Azure ecosystem, it’s fairly straightforward: you can enable multi-modal RAG in Azure AI Search with minimal configuration.
+
+Here’s how it works end-to-end. Data ingestion occurs first, where PDFs, documents, and images are uploaded to Azure Blob Storage. These files are then indexed with Azure AI Search, which creates a hybrid + vector search index. When a user submits a query, vector embeddings are computed and compared against the indexed embeddings, retrieving the best context to feed into the chatbot. The chatbot then generates the answer using the LLM based on both the query and retrieved context—this is the essence of retrieval-augmented generation.
+
+Let’s visualize what happens under the hood with multi-modal RAG in Azure AI Search. The pipeline has two types: simple image verbalization and advanced document intelligence. Focusing first on simple image verbalization: PDFs stored in Azure Blob Storage contain both text and images. Azure AI Search connects to the Blob Storage and acts as the data source. The search resource has three components: Skill Set, Indexer, and Index.
+
+The Skill Set contains several skills. First, it extracts all text using OCR or other libraries. Second, it generates vector embeddings for the text content. Importantly, there’s an Image Verbalization Skill, which sends images to the GPT-4 engine. The engine generates descriptions of images, converting them into textual content. So by the end, you have the original text plus text generated from image descriptions. This text can then be used by the Text Embedding A002 model to generate vector embeddings.
+
+The Indexer maps outputs from the Skill Set to fields in the Index, which stores key-value pairs. Developers can query the index to retrieve chunks for context to feed into the GPT engine for summarization and answer generation.
+
+The second type—advanced document intelligence—builds on image verbalization but focuses on structured documents, like invoices. Here, layout matters. You want to preserve the position of text in tables, bounding boxes, and pages. This ensures accurate citations and proper context for the LLM, which is critical for responsible AI practices.
+
+The pipeline remains similar: invoices are stored in Azure Blob Storage, the Skill Set contains both Image Verbalization and Text Embedding skills, and a new skill called Layout Detection is introduced. This skill uses Azure Document Intelligence’s layout API to extract bounding box coordinates (x1, y1, x2, y2, etc.) of each text segment. The resulting text, along with these coordinates, is passed to the embedding generation skill, producing vector embeddings. The Indexer maps everything into the index, ready for querying and generating context for the LLM.
+
+At the end of this process, everything reduces to text—whether it was originally text, images, or structured tables. This text is then used for embedding generation, indexing, and retrieval to power the GPT engine, enabling accurate, multi-modal, context-aware answer generation.
+
+I know this is a lot to take in, but it’s going to be an exciting module. The lab exercises will make everything clearer, as you’ll get to inspect the Skill Set and Indexer configurations, understand how each part functions, and see what happens under the hood. This hands-on exploration will solidify your understanding of multi-modal RAG in Azure AI.
+
+Without further ado, let’s move on to the next set of videos and get into the practical labs.
 
 # **E) Lab: Deploying RAG Infra on Azure (Hands-On Lab)**
 
+In this video, we’ll take a look at how to set up our RAG (Retrieval-Augmented Generation) pipeline using AI Search and Foundry Agents. Specifically, we’ll focus on the infrastructure setup, which involves deploying all necessary resources in Azure. In the following videos, we will see the pipeline in action once the infrastructure is ready.
+
+I’m working in the VS Code environment in my repository. The folder we’ll be using is AI Search RAG, which resides inside the Agent Service parent folder. This folder contains three main items: a .env file for environment variables, a zip folder containing PDF documents to be uploaded to Azure Storage, and a Jupyter Notebook file rag.ipynb, which we’ll use to build our chatbot on top of these documents.
+
+The intended workflow is as follows: the PDF documents are first stored in Azure Blob Storage. Then, an Azure AI Search resource is created, with the storage account set as a data source. The documents undergo multimodal analysis, generating vector embeddings and creating an index. Once the index is ready, an AI Search tool is attached to the Foundry Agent. Everything will be done via code, allowing the agent to query the documents and provide chat-based interactions.
+
+As part of the infrastructure setup, we need to deploy several resources. This includes creating a storage account and uploading the PDF documents, setting up an AI Search index, provisioning a GPT-4 engine for chat completions, and deploying a Text Embedding Ada 002 model to generate vector embeddings from the documents. These embeddings will then populate the AI Search index, making the content queryable by the Foundry Agent.
+
+First, we deploy the Text Embedding Ada 002 model via the Foundry Studio. This model generates 1536-dimensional vector embeddings, which are compatible with AI Search. After deployment, the model provides a target URI and key for potential Python-based API calls. Additionally, a GPT-4 model is already deployed, which will serve as the chat completions model for the agent.
+
+Next, we create a storage account in the Azure portal. In the same resource group as the project (Foundry Demo RG), we deploy a storage account named RAGStrAccountDemo in the Sweden Central region. The storage type is set to Azure Blob Storage (or Azure Data Lake Storage Gen2), with standard performance and geo-redundant storage (GRS). Once validation passes, the storage account is deployed.
+
+Meanwhile, in our VS Code repository, we unzip the collateral folder, which contains six PDF documents. These documents describe a hypothetical travel company’s offerings in Dubai, Las Vegas, London, New York, and San Francisco, including hotel descriptions and images. This dataset is ideal for testing multimodal RAG, as it includes text and images that will be analyzed and included in the AI Search vector index.
+
+With the storage account deployed, we enable anonymous access under the configuration settings to allow document uploads. Sometimes this setting requires multiple attempts to properly save. Once enabled, we create a container named docs, set the access level to public or container, and upload all six PDF files. Each document now has a publicly accessible URL, which can be opened directly in a web browser.
+
+The next step is creating the AI Search resource. We deploy a new AI Search resource in the same resource group (Foundry Demo RG) and region (Sweden Central). For the pricing tier, we select the Basic tier, which supports 15 indexes, 5 GB vector quota per partition, 3 replicas, and 3 partitions. The estimated cost is around $70–$80 per month, so it’s important to delete the resource after the lab if it’s no longer needed. Once deployed, the AI Search resource provides a protected URL and authentication keys, which can be used to manage the resource.
+
+At this point, the infrastructure setup is complete. We now have a storage account with uploaded PDF documents, a deployed GPT-4 model for chat completions, a deployed Text Embedding Ada 002 model for vector embeddings, and an AI Search resource ready to index the content. In the next videos, we’ll focus on indexing the documents, running multimodal analysis, generating vector embeddings, and connecting the AI Search tool to our Foundry Agent so that we can interact with our dataset via chat.
+
+With that, the infrastructure setup portion is complete, and we’re ready to move forward with the next steps in building a fully functional multimodal RAG pipeline.
+
 # **F) Lab: Creating the AI Search Index (Hands-On Lab)**
 
+In this video, we’ll use the Azure AI Search resource that we deployed during the infrastructure setup and create a vector index using the documents uploaded to our Azure Blob Storage account. The goal here is to enable multimodal RAG by indexing both text and image-based content so that it becomes queryable through Azure AI Search.
+
+I’m currently on the Azure AI Search resource in the Azure portal. From the Overview section, I click on the Import data option, which is part of the newer experience. This allows me to bring in data from multiple sources such as SharePoint, Table Storage, or Microsoft Loop. Since our documents reside in Azure Blob Storage, that’s the data source I select.
+
+Once the data source is chosen, Azure AI Search asks for the key scenario. We are not interested in keyword search or simple RAG—instead, we select Multimodal RAG, which is exactly what we’re building. I then select my subscription, choose the storage account where the documents are stored (ragstraccountdemo), and point to the blob container named docs. Since the documents are stored at the root level, I leave the blob folder field empty and proceed to the next step.
+
+At this stage, Azure validates the data source connection and registers it internally. We’ll later inspect how this data source is represented inside AI Search so that we fully understand what’s happening under the hood rather than just clicking through the UI.
+
+Next comes content extraction, where two options are available: Default and Document Intelligence. The Document Intelligence option is useful when working with invoices, tax documents, or structured forms where preserving layout, tables, and bounding boxes is critical. It uses Azure AI Document Intelligence in the background to extract text along with layout metadata. However, since our documents are simple PDFs containing images and descriptive text—and not structured invoices or tables—we proceed with the Default extraction option.
+
+Now we choose how images should be handled. There are two approaches: Image Verbalization and Multimodal Embedding. With image verbalization, the pipeline sends images to a large language model—specifically GPT-4—which generates a textual description of each image and extracts any visible text. That generated text is then vectorized and stored in the search index. With multimodal embedding, images and text are vectorized directly using a multimodal embedding model without generating textual descriptions.
+
+For our use case, image verbalization is the better choice because users will submit text-based queries and expect text-based answers. This enables text-to-text similarity matching. Multimodal embedding would be more appropriate if users were submitting images as queries and searching for similar images, which is not our scenario. Therefore, we select image verbalization.
+
+For image verbalization, we configure Azure AI Foundry as the resource, choose the Pay-As-You-Go subscription, and select our Foundry project (Udemy Demo Project). The model deployment used here is GPT-4, which will receive images and generate their descriptions. Authentication is handled via API key, and we make sure to enable the required checkbox before moving forward.
+
+Next, we configure text vectorization. Again, we select Azure AI Foundry, choose the same project, and select the Text Embedding Ada 002 model deployment. This model generates 1536-dimensional vector embeddings, which are fully supported by Azure AI Search. Authentication is set to API key, and after enabling the required checkbox, we move to the next step.
+
+The next configuration concerns image output location. During indexing, Azure AI Search extracts images from the documents and stores them in a blob container. We choose the same storage account and create a new container named images, setting the anonymous access level to container. Once created, we select this container and continue.
+
+We are then presented with options related to advanced ranking and relevancy, including Semantic Ranker. Semantic Ranker enhances search results by understanding the nuance of language—for example, distinguishing between “capital” as a city versus “capital punishment.” While we’ll cover Semantic Ranker in more detail later during agentic retrieval demos, we enable it here and move forward.
+
+Now we name our index. I choose multimodal-rag-demo, and Azure automatically applies the same naming convention to the index, indexer, and skillset. Once confirmed, I click Create, and Azure begins indexing the content.
+
+After indexing completes successfully, we can see all three components created:
+
+An Index named multimodal-rag-demo
+
+An Indexer named multimodal-rag-demo-indexer
+
+A Skillset named multimodal-rag-demo-skillset
+
+Let’s first inspect the Skillset, which is the heart of the RAG pipeline. It defines the AI processing steps applied to the data. In total, six skills are configured. The first is the Document Extraction Skill, which extracts metadata such as document title, author, and whether the document contains images. If images are present, they are stored in a normalized images field and later mapped into the index.
+
+The second skill is the Text Split Skill, which breaks document content into chunks of 2000 characters with a 200-character overlap. This chunking strategy ensures that semantic context is preserved across embeddings and enables efficient retrieval.
+
+The third skill is a Chat Completion Skill, which sends extracted images—one at a time—to the GPT-4 model. The system prompt instructs the model to generate concise and accurate descriptions of images, figures, diagrams, or charts, while the user prompt explicitly asks it to describe the image. The output of this step is stored as verbalized image content.
+
+Next is the Azure OpenAI Embedding Skill, which converts the text chunks into 1536-dimensional vector embeddings using the Text Embedding Ada 002 model. This happens for each chunk of text independently. A similar embedding process is applied to the image verbalization output, ensuring both text and image-derived descriptions are searchable in vector space.
+
+The Indexer then maps all outputs from the skillset directly into the index. If you inspect the indexer’s JSON definition, you can see how fields from the skillset are mapped one-to-one into index fields.
+
+The Index itself defines all searchable fields, including content ID, document title, content text, vector embeddings, image metadata, page numbers, and bounding polygons. Some fields are searchable, some filterable, some sortable, and others retrievable. You can also view the complete JSON definition of the index for full transparency.
+
+Using Search Explorer, we can query the index—for example, searching for “Dubai.” The results show default relevance scores as well as semantic rerank scores, which are especially useful because they account for linguistic nuance. We can see document titles like DubaiBrochure.pdf, text content, and also entries generated from image verbalization.
+
+When searching by document ID, we can clearly see GPT-4-generated image descriptions such as a description of the Burj Khalifa illuminated at night, along with their associated vector embeddings. This confirms that both text and image-derived content are successfully indexed.
+
+The Data Source section shows that our Azure Blob Storage account is registered correctly. It serves both as the source of documents and as the destination for extracted images.
+
+Finally, when we navigate back to the storage account and open the images container, we can see folders containing the extracted images. Each image has a publicly accessible URL, and opening it in a browser confirms that the images were correctly extracted from the PDFs and stored.
+
+This brings everything together. We now have a fully functioning multimodal index in Azure AI Search, complete with text extraction, image verbalization, vector embeddings, semantic ranking, and searchable metadata. In the next videos, we’ll connect this index to Foundry Agents and enable conversational querying over our documents.
+
 # **G) Lab: Creating the Multi-Modal RAG Agent (Hands-On Lab)**
+
+Once our infrastructure is fully set up and the vector index has been created, the next step is to actually see everything in action. We do this by creating and interacting with our agent using a code-first approach, specifically through a Jupyter notebook.
+
+I’m currently inside the AI Search folder, which sits under the Agent Service parent folder, and within that folder, I’ve opened the notebook that we’ll be working with. Before we can begin executing this notebook, there’s an important prerequisite: we must populate the required environment variables.
+
+These environment variables include the Foundry project endpoint, the model deployment name, the Azure AI Search connection name, and the Azure AI Search index name. The first two values are already familiar, but the AI Search connection name and index name are new, and we need to retrieve them before proceeding.
+
+To obtain the AI Search connection name, we need to first establish a connection between our Foundry project and the Azure AI Search resource. For this, I navigate to Foundry Studio, go to the Operate section, and then open the Admin Control Panel. From there, I select the project I’m currently working on—in my case, the Udemy Demo Project.
+
+Inside the project settings, I click on Add Connection, choose Azure AI Search, and proceed by selecting the appropriate AI Search resource. After clicking Connect, the connection is established successfully. To verify this, I go to the Connected Resources section, where I can see the newly created connection. It uses API key authentication, displays the connection name, includes the API key, and shows the URI of the AI Search resource.
+
+I then copy this connection name and paste it into the corresponding field in my .env file.
+
+Next, we need the index name. For that, I switch to the Azure AI Search resource in the Azure portal, navigate to the Indexes section, and locate the index that contains our document embeddings. In this case, the index name is multimodal-rag-demo. I copy this value and update it in the environment variable file as well.
+
+While I’m at it, I also grab the Foundry project endpoint from the Foundry home page and confirm the model deployment name, which is GPT-4—the model our agent will be built on. After updating all values, I save the file using Ctrl + S. This step is crucial—don’t forget to save.
+
+With the environment variables in place, we’re now ready to begin executing the notebook.
+
+The first step in the notebook is loading the environment variables from the .env file. These include the Foundry project endpoint, model deployment name, AI Search connection name, and AI Search index name. Next, we initialize a Foundry project client, which establishes a connection to our Foundry resource.
+
+Since we’ll be invoking an agent, we also set up an OpenAI client. Before creating the AI Search tool for the agent, we need to retrieve the connection ID corresponding to our AI Search connection. To do this, we list all available connections and compare each connection’s name against the one defined in the environment file. When a match is found, we store its connection ID in a variable.
+
+Once we have the AI Search connection ID, we move on to creating our RAG agent. We name the agent rag-agent, and this is where the agent definition becomes particularly important.
+
+The agent instruction is straightforward:
+“You are a helpful assistant that uses Azure AI Search to answer user queries in a RAG setup.”
+
+To give this agent access to Azure AI Search, we attach an Azure AI Search Agent Tool. This tool is configured using the previously captured connection ID, the index name, and a query type set to VectorSemanticHybrid.
+
+We use a vector semantic hybrid query because our index contains both vector embeddings and semantic ranking. This approach combines vector similarity with semantic understanding, allowing the search to capture contextual nuance and linguistic meaning. While it’s possible to use only vector search or only keyword search, hybrid search consistently delivers the best results for text-heavy RAG use cases.
+
+We also configure the Top K value, which is set to 3. By default, Azure AI Search can return up to 50 matching documents per query, but passing all of them to an LLM would dramatically increase token usage and potentially degrade response quality. Instead, we restrict the agent to only the top three most relevant documents. Since our documents are relatively small, this value is sufficient. Finding the optimal Top K value often requires experimentation, but getting it right can significantly improve RAG performance.
+
+Once the agent is created, we receive the agent name and agent ID. At this point, we can start interacting with the agent by creating a conversation ID, which also allows us to trace the interaction later in Foundry.
+
+The first user query we ask is:
+“What are the hotels offered by Margaritaville in Las Vegas State? Please include the sources.”
+
+Explicitly asking for sources is important for transparency and traceability, as it forces the agent to list the document URLs from which it derived its answer.
+
+We then initiate a conversation using the agent, passing in the conversation ID and the user query.
+
+The agent responds by listing the hotels offered by Margaritaville in Las Vegas, including descriptions of the Volcano Hotel, Fountain Hotel, and Canal Hotel. It also lists the sources used, which are LasVegasBrochure.pdf and TravelCompanyInfo.pdf.
+
+Next, we ask a second question using the same conversation ID:
+“Tell me about the strategic board composition of Margaritaville Travel.”
+
+This question targets a specific document that contains board-level information. As expected, the agent responds with the board composition:
+
+Margie Long as CEO
+
+Logan Reid as CFO
+
+M. Elfman as CTO
+
+Deepak Nadar as Strategic Director
+
+The agent also cites the correct source: MargaritavilleTravelCompanyInfo.pdf, confirming the authenticity of the response.
+
+To validate everything, we return to the Foundry portal, navigate to the Build section, and confirm that our RAG agent (version 1) has been created with an Azure AI Search resource attached.
+
+In the Traces section, using the same conversation ID, we can see both interactions. For the first query, the total token count is 1244, and the trace clearly shows that the agent invoked the Azure AI Search tool. While the full search output isn’t displayed due to its size, we can confirm that the tool was used successfully.
+
+Similarly, for the second query, the token count is 1534, and the trace shows the remote call made to Azure AI Search, followed by the agent synthesizing the final response.
+
+And with that, we’ve successfully seen the Azure AI Search–powered multimodal RAG agent in action—from infrastructure setup to live querying, source tracing, and execution monitoring.
