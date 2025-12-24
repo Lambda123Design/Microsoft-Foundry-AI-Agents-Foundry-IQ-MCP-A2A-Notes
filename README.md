@@ -1269,7 +1269,69 @@ That said, MCP represents a significant step toward standardization and reliabil
 
 # **C) MCP Server Architecture**
 
+All right, let’s now try to understand the Model Context Protocol (MCP) from an under-the-hood perspective. We’ll look at how MCP servers actually work, the methodology behind them, and how they power AI agents. To begin with, MCP follows a client–server architecture, where a client interacts with one or more MCP servers using a specific protocol—namely, the Model Context Protocol itself.
+
+Since MCP is fundamentally a server, it requires a client that understands and follows the MCP protocol. In a typical setup, the client is your AI application. For example, when you use Claude and attach MCP servers to your agent, Claude becomes the MCP client. Similarly, in Visual Studio Code, when you configure GitHub Copilot to use MCP servers, VS Code acts as the MCP client. In both cases, these applications maintain connections to MCP servers in a standard client–server manner.
+
+You can provide GitHub Copilot access to multiple MCP servers. Some of these servers might be local MCP servers connected to local data sources, while others might be remote MCP servers connected to external services. For instance, a local MCP server could expose data from a local database, whereas a remote MCP server might expose a set of web APIs over the internet. GitHub Copilot communicates with all of these servers using the MCP protocol, without the user needing to worry about how those APIs are implemented internally.
+
+At its core, MCP allows a single host application to connect to multiple MCP servers simultaneously. When we go one level deeper, each MCP server connection is a one-to-one connection. For example, Visual Studio Code acts as an MCP host, and for every MCP server you configure, VS Code opens a separate connection. Internally, the VS Code runtime instantiates an MCP client object for each server, maintaining independent connections whether the server is local or remote.
+
+Now let’s talk about the data layer and transport layer in MCP. MCP is primarily concerned with transferring data from servers to clients, because the client ultimately serves the large language model or chatbot. There are two key questions here: first, how does the client request data from the server, and second, how does the server transport that data back to the client?
+
+The first question relates to the data layer. In traditional APIs, data is typically exchanged using JSON. A client sends a request, receives a JSON response, converts it into objects or dictionaries, and then applies business logic. JSON defines the structure and format of the data exchanged between the client and server.
+
+However, MCP does not rely on plain JSON for its data layer. Instead, MCP servers and clients communicate using JSON-RPC (Remote Procedure Call). RPC is significantly faster and more efficient than plain JSON because it converts data into bytes and allows for compression, resulting in smaller payloads and reduced network overhead. While RPC is more complex to implement, it is widely used by large companies such as Google, Twitter, and LinkedIn for performance-critical systems.
+
+Now let’s move to the transport layer, which defines how the data is actually transmitted from server to client. MCP servers can be either remote or local, and the transport mechanism depends on this distinction.
+
+For remote MCP servers, communication used to rely on Server-Sent Events (SSE), but this has now been replaced by Streamable HTTP. Streamable HTTP is more efficient because it avoids long-running connections between client and server, which can place heavy load on the network. Instead, it provides a more optimized way of streaming data without maintaining persistent connections. In this course, all remote MCP servers will use Streamable HTTP.
+
+For local MCP servers, Streamable HTTP is not required. Since the client and server are running on the same machine, communication happens through the standard input/output (stdin/stdout) stream. Every computer has this stream, which is the same mechanism used when you print output to a terminal using print in Python or console.log in JavaScript. In this setup, the client and MCP server exchange data directly through stdin/stdout without making any network calls or accessing the internet.
+
+With this understanding of the client–server architecture, data layer, and transport layer, we can see that both MCP clients and MCP servers are currently somewhat difficult to implement due to limited abstraction. However, from a practical standpoint, the MCP client side is relatively easy, because tools like VS Code, GitHub Copilot, and Claude already provide prebuilt MCP clients. Building a custom MCP client from scratch would require significant effort, including implementing the protocol, data layer, and transport layer.
+
+The harder part is building MCP servers, especially remote ones. This involves setting up infrastructure, potentially using Kubernetes or container apps, and deploying the MCP server as a microservice. Once deployed, managing this microservice becomes critical.
+
+Key concerns include rate limiting, throttling, and secure access. These are essential for any production-grade MCP server. This is exactly the problem area addressed in the labs of this API management course. You’ll learn how to write an MCP server from scratch, deploy it to Azure Container Apps, and place it behind Azure API Management. From there, you’ll implement rate-limiting policies, authentication mechanisms, and security features such as API keys and JWT-based authentication.
+
+In summary, while the MCP client side is largely handled for us by existing tools, the real challenge lies in building, deploying, and managing MCP servers at scale. That’s the area we’ll focus on going forward.
+
 # **D) API Management and MCP Servers: Solution Architect's POV**
+
+Before diving deep into the demos for MCP and Azure API Management, it’s important to first look at the bigger picture from a CTO’s perspective—a bird’s-eye view of what Azure API Management currently offers to help manage the overall infrastructure of MCP servers that an organization owns and controls.
+
+At this point, we already have a general understanding of MCP servers, but there are several challenges that exist today. One major challenge is that development effort is only part of the problem. Even after building MCP servers, you still need to maintain the infrastructure that powers them. This infrastructure could involve running Kubernetes clusters, Azure Container Apps, or other container-based environments. Since MCP servers run as containers, they effectively become microservices, and microservices must be governed, controlled, throttled, rate-limited, and secured.
+
+Another major challenge lies in security concerns. The AI agent ecosystem is still relatively new and rapidly evolving, which means it has not yet been thoroughly battle-tested from a security standpoint. MCP servers fall into the same category. One of the first security concerns is server trust. A malicious MCP server could impersonate a legitimate one, potentially leading to serious security breaches. This means organizations need a mechanism to identify and trust only approved MCP servers. Ideally, these trusted servers should be maintained in some form of central registry that developers within the organization can safely use.
+
+The second security concern is credential management. MCP servers often interact with sensitive systems such as production databases. Storing tokens or credentials improperly makes them vulnerable to theft. If a malicious actor gains access to an MCP server that connects to production systems, the consequences could be severe. To mitigate this risk, security guardrails must be enforced at the API gateway level. This includes securing access using identity providers, JWTs, and other authentication and authorization mechanisms.
+
+The third challenge is registry and discovery. Organizations need a centralized way to maintain a collection of hand-picked, trusted MCP servers. This registry should sit behind an API gateway and be accessible to all developers within the organization, allowing them to reuse approved MCP servers when building applications. These challenges together define the current pain points in the MCP and AI agent ecosystem.
+
+One of the first solutions Azure API Management provides is the ability to expose existing MCP servers through an API gateway. For example, if you already have an MCP server deployed in Azure Container Instances, Container Apps, or a Kubernetes cluster, you can take its publicly accessible URL and place it behind an Azure API Management instance. This API Management instance acts as an API gateway that governs the MCP server, allowing you to apply policies such as rate limiting, request throttling, and identity-based access control.
+
+This is something that will be explored in the labs for this module. You’ll run an MCP server inside an Azure Container App, expose its public URL, and then place it behind an API Management gateway. Once that’s done, you can consume this MCP server using an Azure AI Foundry agent through the Microsoft Agent Framework. This setup brings together several moving parts and provides a realistic, hands-on experience.
+
+A key advantage of this approach is that API Management is cloud-agnostic. As long as an MCP server is remote and publicly accessible, it doesn’t matter whether it’s deployed on Azure, AWS, or GCP. You can take its URL, place it behind an API Management gateway, and enforce governance policies. By doing so, you gain flexibility, scalability, and centralized control over all MCP-based microservices.
+
+The second major capability provided by Azure API Management is the ability to import existing REST APIs and expose them as MCP servers. Before MCP came into existence, organizations had already built countless REST APIs. The natural question now is whether those APIs need to be rebuilt using an MCP framework. Fortunately, the answer is no. Azure API Management allows you to take an existing REST API and, with minimal effort, convert it into a remote MCP server that AI agents can consume.
+
+As long as you have a publicly accessible REST API URL, you can expose it as an MCP server using API Management. These exposed MCP servers can support both Server-Sent Events and Streamable HTTP, though Streamable HTTP is increasingly preferred because it avoids long-running connections and reduces network overhead. This approach allows organizations to reuse their existing APIs rather than discarding them, enabling a plug-and-play experience for AI agents.
+
+Because all these MCP servers are placed behind an API gateway, organizations can consistently apply governance policies such as throttling, rate limiting, authentication, and scalability controls. This centralized governance model significantly simplifies infrastructure management while improving reliability and security.
+
+Another critical aspect is securing MCP servers, and Azure API Management provides strong capabilities in this area as well. One particularly important setup—covered in an upcoming lab—involves securing MCP servers using OAuth and Microsoft Entra ID. In this flow, an MCP server deployed in an Azure Container App is placed behind an API Management gateway and accessed by an Azure AI Foundry agent.
+
+Before the AI agent can access the MCP server, it must authenticate with Entra ID using an application ID. Entra ID handles authentication using OpenID Connect and authorization using OAuth, ultimately issuing a JWT (JSON Web Token). This JWT is then used to authorize requests to the MCP server through the API Management layer. If a request does not include a valid Entra ID–issued JWT, API Management rejects it with a 401 Unauthorized response. These authentication and authorization checks are enforced through API Management policies, which will be explored in detail during the labs.
+
+The final challenge is maintaining a registry of trusted MCP servers, which is where the concept of an MCP Registry comes into play. This feature, currently in preview and implemented via Azure API Center, allows organizations to curate a set of approved MCP servers. Many companies—such as PayPal, Stripe, and Microsoft—already publish remote MCP servers. Using an MCP registry, organizations can select trusted servers and place them behind their API Management instance.
+
+Instead of developers accessing MCP servers through public URLs, they use the API Management endpoint. This provides visibility into usage patterns, such as how many requests each MCP server receives, which applications are consuming them, and how many requests succeed or fail. It also enables logging, monitoring, and additional layers of authentication and governance.
+
+Although the MCP registry concept is still evolving, it is a powerful idea and shows a lot of promise. Staying ahead of the curve in this space is important, and a brief demo of the MCP registry using Azure API Center will be shown to give a practical understanding of how it works.
+
+In summary, this video focused on understanding the integration of MCP servers with API Management gateways from a CTO and solution architect perspective. It highlighted how Azure API Management addresses infrastructure management, security, governance, and scalability challenges in the MCP ecosystem.
 
 # **E) Lab: Creating an AI Gateway in Foundry Project (Hands-On Lab)**
 
