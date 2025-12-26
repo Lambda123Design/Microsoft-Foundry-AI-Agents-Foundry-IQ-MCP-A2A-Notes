@@ -1406,8 +1406,223 @@ Reviewed governance, MCP servers, and API monetization concepts
 
 # **F) Lab: Capabilities of AI Gateway (Hands-On Lab)**
 
+In this video, we take a quick look at some practical use cases of the AI Gateway to understand how it can be used effectively. To get started, we navigate to the Foundry portal. Under the Model section, we can see that a GPT-4 model is already deployed. By default, this model has certain rate limits associated with it based on the configuration used during deployment.
+
+Now, suppose we want to change the rate limit or throttle requests based on a tokens-per-minute limit. This is exactly where the AI Gateway becomes useful. It allows us to control how many tokens per minute a large language model can consume, helping with cost control and quota management.
+
+To configure this, we go to the Update section, then navigate to Admin, and from there access the AI Gateway section. We click on the AI Gateway instance that is already configured for our project. Inside the gateway, there is a Token Management area located next to the Projects section. This is where we configure token limits for our model deployments.
+
+Here, we can see the deployed GPT-4 model, which currently does not have an explicit custom limit set. While a default limit exists based on deployment settings, no additional restrictions have been applied yet. By clicking Set Limit, we can select the project, choose the model deployment, and enter a numeric value to define a tokens-per-minute limit. Since the total allocated quota for this deployment is 40,000 tokens per minute, the configured value must be lower than that. Setting such limits helps prevent unexpected overuse and keeps token consumption under control.
+
+Next, we look at another use case—governing existing MCP servers using the AI Gateway. For example, consider the Microsoft Learn MCP server, which is publicly accessible and commonly used by agents. To bring it under governance, we navigate to the API Management instance associated with the Foundry Gateway in the Azure portal.
+
+Under the APIs section, we go to MCP Servers and select Create MCP Server, choosing the option to expose an existing MCP server. Here, we provide the base URL of the publicly available MCP server, such as the Microsoft Learn MCP endpoint. We assign a display name (for example, MS Learn MCP Server) and define a base path. The naming itself is flexible and does not impact functionality.
+
+Once created, the MCP server is now exposed via the API Management gateway. At this point, the MCP server is governed through the gateway rather than being accessed directly. To make use of this governed endpoint, we update our tool configuration. We delete the existing direct MCP server connection and create a new custom tool connection using Model Context Protocol (MCP).
+
+We then provide the MCP server name, paste the API Management endpoint, choose unauthenticated as the authentication type, and connect the tool. This ensures that all MCP requests now flow through the AI Gateway, allowing policies to be enforced.
+
+After that, we attach this MCP server to an agent. We create a new agent, name it MCP Demo Agent, and add the MCP server as a tool. In the agent’s system prompt, we specify that the agent has access to the Microsoft Learn MCP server. Once saved, the agent is ready to use the governed MCP server.
+
+We then test the setup by asking the agent for Microsoft Foundry code samples. The request is routed through the API Gateway and forwarded to the MCP server. After approving the tool invocation, we receive a valid response containing code samples and links from Microsoft Learn, confirming that everything is working as expected.
+
+Next, we apply policies to the MCP server. Inside the API Management gateway, we open the MCP server and navigate to the Policies section. We apply a rate-limiting policy, which is sourced from a GitHub repository and pasted into the inbound policy section.
+
+The policy limits calls to the MCP server based on a maximum threshold and renewal period. Initially, the threshold is set to 25 calls per 90 seconds, but we reduce it to 15 calls per 90 seconds for demonstration purposes. Once saved, this policy becomes active immediately.
+
+To validate the policy, we open a new chat session and repeatedly send the same request to the agent. Since the agent uses the API Management endpoint, the rate-limiting policy is enforced automatically. After several consecutive requests—around the sixth or seventh attempt—we hit the rate limit and receive a 429 (Too Many Requests) error.
+
+To make the effect even more visible, we can reduce the limit further (for example, to 2, 3, or 4 calls). In such cases, the rate limit is reached almost immediately, often within the second or third request. This clearly demonstrates how AI Gateway policies control traffic and protect backend services.
+
+In summary, this demo shows how the Microsoft Foundry AI Gateway can be used to:
+
+Control token usage for LLM deployments
+
+Govern external MCP servers
+
+Apply rate-limiting policies
+
+Route agent traffic through a centralized, managed gateway
+
+This was a quick but powerful overview of AI Gateway capabilities. With that, we conclude the demo and move on to the next set of videos.
+
 # **G) Lab: Creating Our Own MCP Server in ACA (Hands-On Lab)**
+
+In this lab, we will be creating our own MCP (Model Context Protocol) server, deploying it to Azure Container Apps, and then placing it behind an API Gateway so that it can be securely consumed by agents using a unified governance approach. The objective of this lab is to help you understand how to build an MCP server from scratch, containerize it, deploy it to Azure, and expose it securely through API Management.
+
+To perform this lab, we will be working primarily with API Gateway and an instruction file named MCP 2.md, which contains the step-by-step instructions that we will follow throughout the lab. This lab involves several Azure components, so we will first walk through the overall architecture and flow before diving into the implementation.
+
+The overall flow starts with setting up the required infrastructure in portal.azure.com. The first component we need to create is an Azure Container Apps Environment. Within this environment, we will deploy one or more Container App instances. These container app instances will host our remote MCP server.
+
+As a side note, if you are interested in learning Azure Container Apps in more depth—especially AI-based use cases—I also have a dedicated course focused entirely on running AI workloads on Azure Container Apps.
+
+Our MCP server will be a remote server, so we will use Streamable HTTP as the transport layer. The MCP server itself will be built using the FastAPI framework along with the FastMCP library. While I personally tend to use Flask for most backend APIs, FastAPI has significantly better support and examples for MCP servers, which is why it has been chosen for this lab. Many MCP code samples available online also use FastAPI, making it easier for you to reference external examples later.
+
+Once the MCP server is ready, we will build a container image for it and push the image to Docker Hub or Azure Container Registry (ACR). For better security, we will use Azure Container Registry in this lab. After that, the image will be deployed to Azure Container Apps as a container app instance.
+
+To clarify terminology:
+
+An Azure Container Apps Environment acts as a logical boundary or “warehouse” that hosts multiple container app instances.
+
+A Container App is similar to a lightweight compute unit that runs containers. It is not a virtual machine, but you can think of it as a logical unit that can run a main container and optional sidecars. In this lab, we only use a single main container, which hosts our MCP server.
+
+With this understanding, we proceed to the first hands-on step: creating the Azure Container Apps environment using the Azure Portal.
+
+Creating the Azure Container Apps Environment
+
+We begin by navigating to portal.azure.com, searching for Container Apps, and selecting Create → Container App. We create a new resource group named Udemy App Demo RG. The container app name can be anything; for this lab, we use demo-container, as it is only a temporary instance used to validate the infrastructure.
+
+The deployment source is set to Container Image, and we choose to create a new Container Apps Environment. The environment is named Udemy-demo-ACA-env. Zone redundancy is disabled, which is fine for this lab.
+
+For workload profiles, we use the default profile, which provides 4 vCPUs and 8 GB memory. Since we are running only a lightweight MCP server, this is more than sufficient.
+
+Monitoring settings are left at their defaults. Azure automatically provisions a Log Analytics workspace, which is acceptable. We do not explicitly configure Azure Monitor since our primary goal is to get the application running.
+
+For networking, public network access is enabled, allowing incoming traffic from the public internet. No virtual network integration is required. After reviewing the settings, we proceed with Create.
+
+This step provisions both the Container Apps Environment and a temporary quickstart container app instance. The initial deployment typically takes around 5–6 minutes because Azure sets up the environment and supporting infrastructure.
+
+Once deployment completes, we navigate to the newly created container app. The Application URL is publicly accessible. When we open it in a browser, we see a simple Hello World response from the quickstart image, confirming that our infrastructure is working correctly.
+
+MCP Server Code Overview
+
+With the infrastructure ready, the next step is to build and deploy our MCP remote server.
+
+The MCP server code resides under the server directory inside the MCP project folder. This directory contains:
+
+A Dockerfile
+
+Two JSON data files: courses.json and recipes.json
+
+The main application file: server.py
+
+A requirements.txt file
+
+The courses.json file contains structured data about Udemy courses, including fields such as course ID, title, description, instructor, rating, reviews, duration, lectures, price in INR, category, and tags.
+
+The recipes.json file contains recipe-related data such as recipe ID, name, description, ingredients, and cooking steps.
+
+These JSON files act as a lightweight knowledge base for the MCP server.
+
+MCP Server Implementation
+
+The MCP server is implemented using FastAPI and FastMCP. The server is initialized with a name and bound to 0.0.0.0, allowing it to accept external traffic. It listens on port 8000.
+
+MCP functionality is exposed through tools, which are defined using MCP tool annotations. Each tool represents a capability of the MCP server, such as querying JSON data or performing business logic. These tools are visible to MCP clients and language models, which decide when to invoke them based on tool names, descriptions, and outputs.
+
+Examples of tools implemented include:
+
+Fetching recipes by name
+
+Fetching recipes by ID
+
+Fetching courses
+
+Fetching courses by ID
+
+Fetching courses above a certain rating threshold
+
+Each tool reads from the respective JSON file, performs a search, and returns structured data back to the MCP client or language model as context.
+
+The MCP server is configured as a remote server using Streamable HTTP transport. The MCP endpoint is mounted at /mcp. This means that once deployed, appending /mcp to the container app URL routes traffic to the MCP server.
+
+The requirements.txt file lists all dependencies required to build the container image successfully.
+
+Creating Azure Container Registry
+
+Before deploying the MCP server, we need a Container Registry. We create an Azure Container Registry (ACR) within the same resource group (Udemy App Demo RG) to simplify cleanup later.
+
+The registry name can be anything (for example, acr). We choose the Basic pricing tier to minimize costs. Public access is enabled, encryption is left at default, and RBAC permissions are used.
+
+Once created, we ensure that Admin user access is enabled in ACR. This is necessary for logging in via the Azure CLI when pushing images.
+
+Building and Pushing the MCP Docker Image
+
+We open the MCP instruction file in an integrated terminal and switch to a bash session. We then set environment variables for:
+
+Azure Container Registry name
+
+Resource Group name
+
+Container Apps Environment name
+
+Next, we navigate to the server directory where the Dockerfile is located. With Docker Desktop running, we build the image using the following naming convention:
+
+<acr-name>.azurecr.io/udemy-demo-mcp-server:latest
+
+
+After building the image, we log in to ACR using az acr login and push the image to the registry. Once completed, the image appears under Repositories in Azure Container Registry.
+
+Deploying the MCP Server to Azure Container Apps
+
+We now deploy the MCP server as a new Container App instance using the Azure CLI. The container app:
+
+Uses the image from ACR
+
+Runs in the previously created Container Apps Environment
+
+Exposes port 8000
+
+Has external ingress enabled
+
+Maintains a minimum of one replica
+
+Because ACR uses RBAC, we enable a system-assigned managed identity for the container app and grant it permission to pull images from ACR.
+
+Within a few moments, the container app is successfully deployed and running. From the Overview section, we retrieve the application URL.
+
+When we access the URL with /mcp appended, the browser displays an error stating that the client must accept text/event-stream. This is expected behavior because a browser is not an MCP client. The message confirms that the MCP server is running correctly and awaiting proper MCP requests.
+
+Conclusion and Next Steps
+
+At this point, we have successfully:
+
+Created an Azure Container Apps Environment
+
+Built an MCP server using FastAPI
+
+Containerized the MCP server
+
+Pushed the image to Azure Container Registry
+
+Deployed the MCP server as a container app
+
+Verified that the MCP endpoint is accessible
+
+In the next video, we will take this deployed MCP server and place it behind Azure API Management, where we will apply policies and governance controls.
 
 # **H) Lab: Adding Our MCP Server to AI Gateway (Hands-On Lab)**
 
+In this video, we will attach the MCP server that we previously created from scratch and hosted on Azure Container Apps to our Azure API Management service, which acts as the API Gateway for the Microsoft Foundry portal.
+
+To begin, I am logged into portal.azure.com and navigated to the API Management service that is acting as the API gateway. Inside the API Management resource, I move to the APIs section, where I can see the MCP Server option. This is where we will register and expose our MCP server through the gateway.
+
+Before creating the MCP server entry, I already have the Azure Container Apps instance URL saved in a notepad. If I copy this URL, paste it into a browser, and append the /mcp path, it confirms that the MCP server is up and running. However, you will not see a meaningful response in the browser. This is expected behavior because browsers do not support the Model Context Protocol. The error message indicating that the client must accept an event stream is actually a good sign—it confirms that the MCP server is active and expecting an MCP-compliant client.
+
+Next, I return to the API Management portal and click on Create MCP Server. Since this MCP server already exists and is hosted externally on Azure Container Apps, I select the option to Expose an existing MCP server.
+
+In the configuration screen, I provide the Base URL of the MCP server. This is the same Azure Container Apps URL that we verified earlier, with the /mcp path appended. This tells API Management exactly where the MCP server endpoint is located.
+
+For the Display Name, I enter Udemy Demo MCP Server. The Base Path is also set to udemy-demo-mcp-server. This base path will be used by API Management to route requests to this MCP server. Once these values are set, I click on the Create button.
+
+After creation completes, the MCP server hosted in Azure Container Apps is now successfully onboarded into Azure API Management. If I navigate into the newly created Udemy Demo MCP Server entry, I can see the MCP server URL managed by the API gateway. From this interface, I also have the option to configure API Management policies, such as authentication, throttling, logging, and governance controls.
+
+We will explore and apply those API Management policies in the next video.
+
+With this step completed, we have successfully connected our Azure Container Apps–hosted MCP server to Azure API Management, enabling it to act as a secure, governed API gateway for use within the Microsoft Foundry portal.
+
 # **I) Lab: Testing Rate Limiting Policy (Hands-On Lab)**
+
+Now that our Azure Container Apps–hosted MCP server is up and running, the next step is to attach it to the Microsoft Foundry portal as an MCP tool. We will use the MCP server URL, which is protected by the API Management instance, and later use it within an agent. Additionally, we will implement a rate-limiting policy and observe it in action.
+
+To start, I copy the MCP server URL and navigate to the Tools section in the Microsoft Foundry portal. I click on Connect Tool, select Custom, and choose Model Context Protocol before clicking Create. I provide the name Udemy Demo MCP Server and set the MCP server endpoint to the URL we copied earlier. For authentication, I choose Unauthenticated, and then click Connect to successfully register the MCP server with the Foundry portal.
+
+Next, we integrate this tool with an agent. I create a new agent and name it Udemy MCP Agent, then click Create. Returning to the Tools section, I select the Udemy Demo MCP Server, choose the option to use this in an agent, and associate it with the agent I just created. Now, the MCP server is successfully added to the agent. I configure the agent by defining it as a helpful assistant with access to the MCP server. This agent is built on a GPT-4 model. After setting this up, I click Save to save the new version of the agent.
+
+To test the integration, I ask the agent a query: “Can you tell me something about the recipe with ID six?” The system requests approval to invoke the MCP server function. After clicking Approve, the agent successfully retrieves the recipe: vegetable stir fry, along with its description, ingredients, and preparation steps. Next, I query the agent for “a list of all courses by Udemy instructor Singh Bakshi with average rating greater than 4.2”. After approval, the agent returns the relevant courses from the MCP server, confirming that the integration works correctly for multiple queries.
+
+The next step is to apply a rate-limiting policy to the MCP server. I navigate back to the MCP server in the Foundry portal and access the Policy section. From my GitHub repository, I open the rate_limiting_policy.md file and copy the policy configuration, which limits inbound requests. I modify the threshold value to six requests with a renewal period set to 90 seconds, then click Save.
+
+To test rate limiting, I rerun the query “Can you tell me something about the recipe with ID six?”. On the first run itself, an error occurs indicating that the threshold has been exceeded. This happens because the agent makes multiple backend API calls per single query—for example, calls to list tools, invoke the function, fetch the response, and requery tool metadata. Therefore, even a seemingly low threshold can be exhausted quickly. It is important to experiment with and fine-tune the rate-limiting value according to your business use case, which may require values like 15 or 25 depending on the expected load.
+
+This video demonstrated how to bring your own MCP server under the API Management governance layer, integrate it with an agent, and apply a rate-limiting policy to control usage. These steps provide a robust way to securely expose your MCP server for controlled access while enabling experimentation and governance.
