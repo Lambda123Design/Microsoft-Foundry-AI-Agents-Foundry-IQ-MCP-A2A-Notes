@@ -1645,12 +1645,280 @@ This video demonstrated how to bring your own MCP server under the API Managemen
 
 # **A) Introduction to Foundry IQ**
 
+In this video, we take a look at Foundry IQ, which forms the entire knowledge layer for agents within the Microsoft Foundry ecosystem. To truly understand its role, it’s important to zoom out and look at the bigger picture—where Foundry IQ sits in the overall Foundry architecture. You can think of Foundry IQ as an enterprise-wide knowledge hub.
+
+In a typical organization, documents and information are spread across multiple systems such as SharePoint, OneLake, Azure AI Search, Cosmos DB, and the broader Microsoft 365 ecosystem, including Word, Excel, PowerPoint, and SharePoint. Foundry IQ aims to bring knowledge from all these disparate data sources together, creating a single source of truth that agents can rely on for accurate and consistent information retrieval.
+
+To understand the value Foundry IQ provides, let’s look at the problem it is designed to solve. Suppose you build a Retrieval Augmented Generation (RAG) pipeline and an agent that answers user queries based on enterprise knowledge. This pipeline typically relies on a vector database that contains only a limited set of documents.
+
+Now imagine a user submits a query such as:
+“Equipment with label P432 is not working. CTL 11 light is dead. Maybe a power supply problem. The cord has another label UL 817. Is it okay to replace the part?”
+
+The user is clearly confused and looking for guidance—whether the issue is related to the power supply, whether a part should be replaced, or what corrective action is appropriate. The challenge is that the documents required to answer this query may not exist in a single vector index. Some answers might reside in Azure AI Search or OneLake, while others might be found in company policy documents stored in Word files or SharePoint.
+
+A single vector index is often insufficient to handle such scenarios. This is where Microsoft Foundry IQ comes into play. Foundry IQ encapsulates knowledge from multiple sources into a unified knowledge system, enabling agents to retrieve information from virtually anywhere within the enterprise.
+
+Conceptually, Foundry IQ is built on two key components: knowledge bases and knowledge sources. Together, these components form the foundation of Foundry IQ.
+
+A knowledge base represents a complete domain of knowledge. An organization may define multiple knowledge bases, each aligned to a specific business domain or context. For example, you might have one knowledge base for HR and another for Finance. Each knowledge base is composed of multiple knowledge sources—such as a specific SharePoint site, an existing Azure AI Search index, OneLake, or even a vector index stored in Azure Cosmos DB—tailored to that domain.
+
+This approach provides a strong separation of concerns between agents and knowledge retrieval. Previously, when building RAG-based agents, everything was tightly coupled. The agent itself handled instructions, tools, authentication, authorization, PDF parsing, content extraction, embedding generation, and vector storage. All of this logic lived inside a single agent implementation, often written in custom Python code.
+
+This tight coupling made debugging difficult. When something broke, it was hard to pinpoint whether the issue lay in the agent logic, data ingestion, embedding generation, or authorization layer.
+
+With Foundry IQ, this changes completely. The agent is now built with instructions, tools, and a reference to a knowledge base. The knowledge base independently manages all knowledge-grounding mechanisms—data ingestion, indexing, authentication, authorization, vectorization, and retrieval. If something goes wrong, you can immediately identify whether the issue is in the agent or in the knowledge base, enabling far better maintainability and scalability.
+
+Knowledge sources are the individual data providers that feed into a knowledge base. These could include SharePoint, Azure AI Search indexes, OneLake, or Azure Data Lake Storage Gen2. Each knowledge source encapsulates a specific data system and includes the necessary authentication and authorization mechanisms required to access it.
+
+Together, these knowledge sources form a single knowledge base that centrally manages knowledge retrieval operations such as data fetching, chunking, vectorization, and access control, all from a unified control plane.
+
+A common question is where all this indexed information—especially vector embeddings—is stored. Foundry IQ is built as an extension of Azure AI Search. All processed content, including vector embeddings, textual data, metadata, and access control information, is ultimately indexed in Azure AI Search.
+
+Azure AI Search is Microsoft’s state-of-the-art search solution, known for its scalability and high-quality retrieval capabilities. It is also used internally by teams working on ChatGPT, as documented in multiple Microsoft blogs. This means Foundry IQ leverages a proven, enterprise-grade search backend for building agents over enterprise knowledge.
+
+Another powerful feature of Azure AI Search is Skillsets. Skillsets allow you to perform additional AI-based enrichment on indexed content, such as keyword extraction, language translation, and other cognitive transformations. These capabilities integrate seamlessly with Azure Cognitive Services, ensuring that all processing stays within the Azure ecosystem.
+
+Now let’s talk about data preparation, which is crucial for scalability and multimodal support. Enterprise data often includes both structured and unstructured content stored across Azure Blob Storage, OneLake, SharePoint, and other systems. This data may also include images, scanned documents, and text embedded within images.
+
+To handle this, Foundry IQ uses a data preparation pipeline powered by Azure Content Understanding. This pipeline delivers high-quality optical character recognition (OCR), PDF parsing, layout preservation, table extraction, and even image verbalization, where images are converted into textual descriptions.
+
+The pipeline begins with connectivity, ensuring proper authentication and authorization to access each data source. Next comes file format handling, where different processing strategies are applied based on whether the data consists of Word documents, PDFs, images, or other formats.
+
+The transformation layer then processes the content using Azure Content Understanding. This includes OCR, layout extraction, table handling, chunking, and image verbalization. Once all information is converted into text, the representation layer generates vector embeddings and stores them along with metadata such as author, title, labels, and access control lists in the final Azure AI Search index.
+
+This index ultimately serves as the knowledge base used by agents during retrieval.
+
+To visualize this in action, consider the Azure AI Search service interface. Within the service, there is an Agentic Retrieval section that contains both knowledge sources and knowledge bases. For example, a knowledge base named Carbon Ops KB includes a detailed description that helps agents determine whether this knowledge base is relevant for a given query.
+
+The description is critical—it provides semantic context that guides the agent’s decision-making during retrieval. This knowledge base may source data from SharePoint and Azure Blob Storage, and it also references a chat completion model. This model is used both for image verbalization during data preparation and for generating final responses during agentic retrieval.
+
+On the knowledge sources side, you might see a blob storage account and a SharePoint connector, each with its own description. These descriptions further enrich the agent’s understanding of what type of information is stored in each source and how it should be used.
+
+For those interested in learning more, Microsoft has published several official blogs that dive deeper into Foundry IQ. The links are provided, and the presentation used in this video will also be attached in the resources section so you can explore them directly.
+
+That concludes this introduction to Microsoft Foundry IQ. In the next set of videos, we’ll build on this foundation and explore more advanced concepts.
+
 # **B) Understanding Agentic Retrieval in Foundry IQ**
+
+Now let’s try to understand how Agentic Retrieval works with Foundry IQ. What you’re seeing here is the complete Agentic Retrieval pipeline, which consists of several tightly integrated components such as source selection and query planning, knowledge sources, parallel query execution, L2 semantic ranking, L3 semantic classification, and finally a fine-tuned custom small language model. While this might sound like a lot at first, the goal of this video is to break down the architecture and walk through the entire process step by step.
+
+The first step in the pipeline is source selection and query planning. Whenever a user query comes in, it is first routed to the agent. The agent may be connected to multiple knowledge bases, each aligned with a specific business domain—for example, an HR knowledge base or a finance knowledge base. Each of these knowledge bases can internally consist of multiple knowledge sources such as SharePoint, OneLake, Azure Data Lake Storage, Azure Blob Storage, and others.
+
+At this stage, the agent evaluates the descriptions of the available knowledge bases and their underlying knowledge sources. Based on these descriptions, the agent determines which knowledge base and which knowledge sources are most relevant for answering the user’s query. Once this decision is made, the source selection phase is complete.
+
+Following source selection comes query planning. Here, the agent analyzes the intent of the user query along with the conversation history. Based on this understanding, the agent decides which queries should be executed and how they should be run in parallel across the selected knowledge bases and knowledge sources. Together, source selection and query planning form the first major step of the Agentic Retrieval pipeline.
+
+The second step involves executing these planned queries in parallel. Sub-queries are run across the selected knowledge sources, which can include local searches against internally built vector and text indexes sourced from Azure Blob Storage and Microsoft OneLake, as well as searches against Azure AI Search. In addition, the system can perform remote searches against external targets such as SharePoint within Microsoft 365. Beyond internal enterprise data, the pipeline can also bring in external knowledge from Bing web grounding and even MCP servers.
+
+Once these parallel queries are executed, each query returns a list of documents. For every knowledge source queried, the system retrieves the top 50 documents. These documents are then passed through the L2 semantic ranking system. The purpose of the L2 semantic ranker is to capture the linguistic nuance and semantic meaning of the content in relation to the user query, its intent, and the conversation history.
+
+The L2 semantic ranker assigns a semantic similarity score to each of the 50 retrieved documents and ranks them accordingly. From this ranked list, the top 10 documents are selected for each knowledge source. These top documents from all selected knowledge sources are then combined into a single collection.
+
+This combined set of documents is then passed to the L3 semantic classifier. The L3 semantic classifier applies additional natural language processing techniques to further refine and re-rank the documents based on deeper semantic understanding. At this stage, the system has a highly curated set of documents that are most relevant to the user’s query.
+
+Next, these documents—along with the original user query—are sent to a fine-tuned custom small language model (SLM). This model evaluates whether the retrieved information is sufficient to generate a high-quality response or whether the retrieval loop needs to be executed again. If the model determines that another retrieval pass is necessary, the system initiates a second iteration of the pipeline.
+
+In such cases, the top documents from the first run are preserved, and the pipeline re-enters the loop starting again from source selection and query planning. The queries are re-executed, and a new set of documents is retrieved and ranked. The documents from the second run are then combined with those from the first run. Together, these documents form what is known as the grounding knowledge.
+
+The decision made by the fine-tuned SLM to rerun the pipeline is referred to as reflective search. When configuring an Agentic Retrieval system, you are required to specify a reasoning effort level, which can be set to minimal, low, or medium. Reflective search is available only in the medium reasoning effort level and is not supported in the minimal or low levels. This distinction becomes clearer during hands-on labs, but it is important to keep it in mind while designing your system.
+
+Once the final set of documents—either from a single run or from two runs in the case of reflective search—has been consolidated, this merged set becomes the final grounding knowledge. This grounding knowledge is sent back to the agent along with the user query. The agent then uses this information to generate an accurate and context-aware response. This step represents the generation phase of the Retrieval Augmented Generation (RAG) pipeline.
+
+This entire process illustrates how Agentic Retrieval operates within Azure AI Search when working with Foundry IQ knowledge bases and knowledge sources.
+
+To validate the effectiveness of Agentic Retrieval, Microsoft conducted a study, which is referenced at aka.ms/kb-evals. The study aimed to answer a simple question: Is agentic retrieval actually better? The results showed a 36% improvement in performance, measured across multiple knowledge sources. The gains were even more significant when reflective search was enabled.
+
+The accompanying graph illustrates answer scores by retrieval reasoning effort. When the reasoning effort is set to low—meaning no reflective search—the system performs reasonably well for simple queries but struggles with more complex ones. As the queries become increasingly difficult, the medium reasoning effort, which includes reflective search, consistently delivers higher accuracy and precision.
+
+This trend is further reinforced by the table shown, where lower reasoning effort levels result in reduced accuracy for complex queries, while medium reasoning effort achieves significantly better results due to its ability to reflect and rerun retrieval. Ultimately, the choice of whether to enable reflective search depends on the nature of your queries and the complexity of your knowledge base.
+
+It’s also important to consider token consumption and cost implications. Reflective search requires rerunning parts of the pipeline, which increases token usage. While reflective search is limited to a maximum of two retrieval passes, this additional computation can still impact cost and should be factored in if you have budget or financial constraints.
+
+That concludes the detailed walkthrough of Agentic Retrieval and Reflective Search in Azure AI Search using Foundry IQ. With that covered, we’re now ready to move on to the next set of videos.
 
 # **C) Understanding BM25 Ranking and Semantic Re-Ranking in AI Search**
 
+Now let’s talk about how searching, ranking, and scoring work in Azure AI Search. More specifically, we’ll focus on how @search.score and @search.rerankScore are calculated when semantic reranking is enabled. Understanding these two scoring mechanisms is extremely important if you want to improve search relevance in Retrieval Augmented Generation (RAG) pipelines. Without knowing how these scores work behind the scenes, it becomes very difficult to optimize search behavior at a deeper, more granular level.
+
+To understand this better, let’s look at what’s happening inside Azure AI Search. Within the Azure Search service, a knowledge base is created and connected to one or more knowledge sources. Once the knowledge base is set up, all information sourced from these knowledge sources is indexed under the Indexes section within Search Management. In this case, there is an index named CSE Azure Blob Carbon Index.
+
+When you open this index and run a simple keyword query—such as “Carbon Ops”—Azure AI Search returns the top 50 documents. Each document has two associated scores. The first score is @search.score, which is typically a smaller numeric value. The second score is @search.rerankScore, which is usually much higher. The @search.score is calculated using Azure Search’s default BM25 ranking algorithm, while the @search.rerankScore comes from semantic reranking, which enhances BM25 by incorporating natural language understanding. You can think of semantic reranking as BM25 ranking on steroids, because it goes beyond keyword matching and captures linguistic nuance and contextual meaning.
+
+To fully understand how these scores are computed, we first need to understand BM25 ranking and relevance scoring. When you create an index, you start by defining one or more data sources. In this case, the data sources are an Azure Blob Storage account and SharePoint. Azure AI Search connects to these sources using authentication and authorization, extracts textual content (and images if multimodal indexing is enabled), and builds an inverted index.
+
+An inverted index is a structure that maps terms to document IDs. For example, the term “cat” might appear in documents with IDs 1, 3, and 6, while “dog” might appear in documents 2 and 5, and “fish” only in document 4. This is different from a forward index, which maps document IDs to the terms they contain. Azure AI Search relies on inverted indexes because they make keyword lookup extremely efficient.
+
+Once documents are ingested, Azure AI Search performs text processing and lexical analysis. Sentences are broken down into normalized tokens, and irrelevant words such as “this”, “has”, or “and”—commonly known as stop words—are removed. Synonyms may also be generated. For example, the sentence “This beautiful hotel has Seattle’s largest indoor pool” is broken into meaningful tokens like beautiful, Seattle, largest, indoor, and pool. These processed tokens form the foundation for BM25 keyword matching and relevance scoring.
+
+Next, Azure AI Search builds the inverted index using these tokens. Each token is mapped to the documents in which it appears. For example, downtown may appear in documents 1, 2, and 3; hotel in documents 1 and 2; pool only in document 1; theaters in document 4; and high-rise in document 2. This inverted index is used purely for retrieval, not ranking—it helps identify which documents match the query terms.
+
+When a user submits a query, Azure AI Search applies lexical analysis to the query as well. The query is tokenized, synonyms are generated, and each token is matched against the inverted index. The documents that contain these terms are retrieved, and the union of these documents becomes the candidate set. At this point, no ranking has occurred yet—this is still the retrieval phase.
+
+Ranking begins with BM25 scoring, which uses the TF-IDF (Term Frequency–Inverse Document Frequency) methodology. BM25 evaluates how often query terms appear in a document relative to the document’s length, and how rare those terms are across the entire document corpus. For example, if a user searches for “downtown hotel with pool” and a document contains the word pool multiple times within a short document, that document receives a higher score. Additionally, if pool is a rare term across the corpus, documents containing it are ranked even higher.
+
+BM25 also considers field weighting. A single document may contain multiple fields such as name, description, reviews, tags, location, rating, and price. Azure AI Search allows you to assign different weights to these fields. For example, matches in the name field might be given higher importance than matches in the reviews field. These weights directly influence the final BM25 score and are fully configurable.
+
+In Azure AI Search, you can define scoring profiles to control BM25 behavior. From the index settings, you can create a new scoring profile, select the fields that matter most, assign weights, and even add scoring functions. In this example, fields such as uid, snippet, and snippet vector are used, but you could just as easily configure fields like title, metadata, content, or reviews. The final BM25 score produced by this configuration appears as @search.score.
+
+Now let’s look at semantic L2 reranking and why it is so powerful. Keyword-based BM25 ranking does not understand context. For example, if a user asks “What is the capital of France?”, BM25 might return documents about capital punishment or capital gains tax in France, because it matches keywords rather than meaning. These results are technically correct keyword matches but completely irrelevant to the user’s intent.
+
+Semantic reranking addresses this limitation by capturing semantic meaning and linguistic relationships. It understands that capital in this query refers to a location, and that the user is asking about Paris. As a result, documents discussing France as a country and Paris as its capital are ranked higher. This dramatically reduces noisy or misleading results.
+
+Under the hood, semantic reranking operates in multiple stages. First, BM25 retrieves and ranks documents as usual. These BM25 results are then passed to the semantic ranker. For each document, Azure AI Search extracts content from configured fields such as title, keywords, and content, up to a maximum of 2000 tokens. This content is sent to a natural language processing engine—now implemented using a small language model (SLM)—which generates summaries and captions that capture the document’s semantic meaning.
+
+These summaries are then passed to a semantic classifier, which uses machine reading comprehension techniques to evaluate how relevant each document is to the user query. Based on this analysis, Azure AI Search assigns a @search.rerankScore, which ranges from 0 to 4, where 4 indicates the highest semantic relevance.
+
+Semantic reranking is configured through semantic configurations in the Azure Search index. You can define a semantic profile, select title fields, content fields, and keyword fields, and specify how documents should be summarized and analyzed. This configuration directly influences how semantic captions, summaries, and reranking are performed.
+
+The final search results therefore contain both scores:
+
+@search.score from BM25 ranking
+
+@search.rerankScore from semantic L2 reranking
+
+Microsoft has validated the effectiveness of semantic reranking through extensive studies. In one such study, keyword search alone produced the lowest accuracy, vector search performed better, and hybrid search (keyword + vector) improved results further. However, hybrid search combined with semantic reranking produced the highest accuracy and query hit rate by a significant margin.
+
+The key takeaway is that for RAG pipelines, the best results come from using keyword search, vector search, and semantic reranking together. This combination ensures that your agent receives the most contextually relevant grounding documents, which directly improves response quality from the language model.
+
+That concludes the discussion on BM25 ranking and semantic reranking in Azure AI Search. Understanding what happens under the hood is critical for fine-tuning retrieval pipelines to suit specific business use cases. With this knowledge, you can confidently optimize search relevance instead of treating it as a black box.
+
 # **D) Lab: Setting Up Foundry IQ Knowledge Base and Sources (Hands-On Lab)**
+
+In this video, we begin the lab for creating a knowledge base in Foundry IQ and then move toward creating a Foundry agent grounded in that knowledge base. The main objective of this video is to set up the entire infrastructure—uploading documents, configuring storage, and getting the AI Search pipeline ready—so that the lab is fully operational. At this stage, the focus is purely on infrastructure setup rather than agent behavior or query execution.
+
+I am currently inside the Foundry IQ folder, which contains everything required for this lab. The codebase and notebook we will work with are located here. This folder includes a notebook file, a markdown instruction set that outlines the infrastructure setup steps, and a .env file used to configure environment variables. The markdown file serves mainly as a reference to track steps already completed rather than as the sole guide.
+
+If we look at the overall lab flow, the first step is uploading documents to an Azure Blob Storage account. In parallel, we also upload a separate set of documents to a SharePoint site. Once the documents exist in both locations, all of them are brought together into an Azure AI Search index, which acts as the foundation of our knowledge base. On top of this AI Search–powered knowledge base, we then create a Foundry agent. In summary, the knowledge sources are Azure Blob Storage and SharePoint, the knowledge base resides in Azure AI Search, and the Foundry agent sits on top of that knowledge base.
+
+The documents to be uploaded are already organized into two folders: blob and SharePoint. The blob folder contains two PDF documents that will be uploaded to Azure Blob Storage. These documents describe the Carbon Ops SD Intelligence Model Proprietary Framework (Version 1) and provide information about ESG frameworks and how they map to sustainability scores. These are dummy documents created for a fictional company called Carbon Ops and represent product specifications and proprietary frameworks related to sustainability and ESG reporting.
+
+The SharePoint folder contains two HR-related PDF documents for Carbon Ops. One document covers Carbon Ops’ leave and well-being policy, and the other describes the global remote work and flexibility policy. Together, these documents form the HR policy knowledge that will be uploaded to a SharePoint site, while the product and framework documents remain in Blob Storage.
+
+The markdown instruction file is used as a checklist to verify which steps have been completed. While it contains instructions, some details might be hidden, so the video walkthrough is intended to ensure clarity rather than forcing reliance on the markdown alone.
+
+Next, I demonstrate the current Azure infrastructure setup. In the Azure portal, I already have a Microsoft Foundry project created. Under the Build section, two models are configured. The first is a chat completion model, specifically GPT-4, which is used both for agent responses and for image verbalization when creating the knowledge base. The second model is a vector embedding model, text-embedding-ada-002, which is used to generate vector embeddings for all textual content in the documents.
+
+In the Azure portal, within the resource group, I already have an Azure AI Search resource and an Azure Storage account deployed. The next step is uploading the documents to Blob Storage. Inside the storage account, I create a new container named foundry-iq-docs. The anonymous access level is set to container so that documents are publicly accessible via URL. After creating the container, I upload the two PDF files from the blob folder in the codebase.
+
+Once uploaded, I verify accessibility by opening one of the file URLs directly in a web browser. Since the document opens successfully, this confirms that the Blob Storage setup is correct.
+
+After that, I show the SharePoint setup. A SharePoint site named Carbon Ops HR Site has already been created, and the two HR PDF documents have been uploaded there. This can be accessed through portal.office.com by navigating to the SharePoint app and opening the Carbon Ops HR site. Both HR policy documents are visible and ready for use.
+
+At this point, the steps related to creating the storage account and uploading documents to Blob Storage and SharePoint are complete. The remaining task is to connect the Azure AI Search resource to Foundry IQ and create the knowledge base. The AI Search resource is running on the Basic pricing tier, as the Free tier may not support knowledge base creation. It is recommended to delete resources afterward to avoid unnecessary costs.
+
+Inside Foundry IQ, I navigate to the Knowledge section. The Azure AI Search resource is already connected, but I also explain how to connect it manually. This can be done from the Operate → Admin section by selecting the project, clicking Add Connection, and choosing Connect Azure AI Search. After browsing and selecting the search resource, it appears with API key authentication and the target endpoint URL.
+
+Once connected, the AI Search resource appears automatically in the Knowledge section. From here, I begin creating a new knowledge base. The first step is choosing the knowledge source. Although existing AI Search indexes can be used, I start with Azure Blob Storage. Foundry IQ also provides other connectors such as Bing web grounding, Microsoft SharePoint (remote and indexed), OneDrive, Azure Cosmos DB, PostgreSQL, and Elasticsearch.
+
+A key distinction is explained between Microsoft SharePoint Remote and Microsoft SharePoint Index connectors. The remote connector retrieves content on the fly and respects Microsoft 365 access control policies, ensuring users only see documents they are authorized to access. The indexed connector, on the other hand, pre-indexes SharePoint content into Azure AI Search but does not enforce SharePoint ACLs in the same way. For sensitive or access-controlled content, the remote connector is preferred.
+
+I proceed by selecting Azure Blob Storage and naming the knowledge source Carbon Ops Azure Blob. A detailed description is added to help the agent decide when to use this source during retrieval. The storage account and container (foundry-iq-docs) are selected. For content extraction, I choose Standard mode instead of Minimal, as the documents contain tables. Standard mode provides better layout preservation at the cost of higher token usage.
+
+For vectorization, I select the text-embedding-ada-002 model, and for chat completions, GPT-4 is chosen. Advanced options allow scheduling ingestion or specifying folder paths, but since the documents are stored at the root level, these are left unchanged. Image verbalization remains enabled, even though the documents do not contain images. The knowledge source is then created.
+
+Next, the knowledge base itself is named Carbon Ops Knowledge Base. A detailed description is provided, explaining that it contains documents from both Azure Blob Storage and SharePoint related to Carbon Ops ESG frameworks and HR policies. GPT-4 is selected again as the chat completion model, and the retrieval reasoning effort is set to Medium to allow reflective search for complex queries.
+
+The output mode is set to Extractive Data, meaning the system will return document metadata and retrieved content rather than generating full answers. Since the agent will handle answer synthesis later, this mode is sufficient. Retrieval instructions are added by reusing the description to guide the agent on which knowledge source to query for ESG frameworks versus HR policies. The knowledge base is then saved.
+
+Once indexing completes, the Blob Storage knowledge source shows an Active status. After that, a second knowledge source is added using Microsoft SharePoint Remote. This source is named Carbon Ops SharePoint Remote, with a description indicating it contains internal HR policy documents. Advanced options such as file extension filters and metadata constraints are available but left blank. The connector uses real-time access and respects SharePoint permissions, relying on Microsoft Graph and the same semantic infrastructure used by Microsoft Copilot for M365.
+
+After creating and activating this SharePoint knowledge source, both Blob Storage and SharePoint sources are now part of the same knowledge base. The configuration is saved, and the knowledge base is fully ready.
+
+At this stage, all steps in the markdown reference file are complete. The knowledge base has been successfully created with properly separated and well-described knowledge sources. The recommendation is to keep knowledge bases domain-specific to avoid hallucinations and unnecessary confusion when agents retrieve information.
+
+In the next video, the focus will shift to exploring the Azure AI Search index in detail and creating a Foundry agent using this knowledge base. This video intentionally stops here to keep the duration manageable before moving into agent creation and behavior.
 
 # **E) Lab: Creating Foundry IQ Agent via the Portal (Hands-On Lab)**
 
+So up until now, what we have is a knowledge base that we created. Internally, this knowledge base has two knowledge sources, namely an Azure Storage account and a SharePoint site. Now, let’s take a look at how the index essentially looks in Azure AI Search.
+
+I’ll navigate to portal.azure.com and open the index that is connected to our knowledge base. From there, I’ll go to the Knowledge Sources and Knowledge Bases section, and then specifically into the Knowledge Bases tab. Here, you can clearly see that I have a working knowledge base named Carbon Ops Knowledge Base. The description shown here is the same one that I provided during creation. This knowledge base includes two knowledge sources: Carbon Ops Azure Blob Case and Carbon Ops SharePoint Remote Case.
+
+The completion model attached to this knowledge base is GPT-4o. You can even click into this and inspect the full definition. What you see here is the JSON definition of the entire knowledge base. This definition explicitly shows both knowledge sources. This JSON can be extremely useful if you plan to automate knowledge base creation or management programmatically using the Azure AI Search APIs.
+
+Next, I’ll move to the Knowledge Sources section to inspect them individually. As expected, there are two knowledge sources listed: one for Carbon Ops Azure Blob, and another for Carbon Ops SharePoint Remote CSE. One of these sources was created earlier during a prior demo to validate the setup, so you can ignore that detail. The important point is that both sources are correctly configured and operational.
+
+Now, if I navigate to the Indexes section, you’ll see that there is a single index currently active. This index contains information that is indexed only from Azure Blob Storage, not from SharePoint. This is because SharePoint is configured as a remote knowledge source. When I run a search query—for example, searching for “Carbon Ops”—you’ll notice that around 919 documents appear in the results, even though only two documents were uploaded.
+
+This happens because chunking is applied during indexing. Documents are split into chunks of roughly 2000 characters, and vector embeddings are computed for each chunk. You can also see that semantic reranking is enabled. Alongside this, you’ll find the BM25 ranker score as well as the semantic rerank score. Each result includes a Blob URL pointing to the original document stored in Azure Blob Storage, along with a snippet that represents the textual content extracted from that chunk. Additionally, each snippet has an associated vector embedding, which represents the numerical embedding of that content.
+
+Now let’s check whether an indexer was created. If I navigate to the Indexers section, I can see the indexer that maps data from the skillset into the index. This indexer handles the entire mapping process. If you click on Edit JSON, you’ll notice that the indexer is correctly wired to both the index and the skillset. This confirms that a skillset exists and that it pulls data from the configured data source, which in this case is the Carbon Ops Azure Blob source.
+
+If you upload new documents into the Blob Storage container and want them indexed, the process is straightforward. You simply go to the indexer, click Reset, and then click Run. This re-executes the indexer and populates the index with any newly added documents.
+
+Next, let’s inspect the skillset to understand the AI enrichment pipeline. This skillset contains four skills. The first one is the Content Understanding Skill, which extracts content from documents, performs OCR on images, computes metadata, and supports multimodal understanding scenarios.
+
+The second skill is an Azure OpenAI Embedding Skill, which takes extracted text and generates vector embeddings using the text-embedding-ada-002 model. The embedding dimension is set to 1536, meaning each vector contains 1536 values.
+
+The third skill is a Chat Completion Skill used for image verbalization. Images extracted during content understanding are sent to a GPT-4 model via a POST request. The system message instructs the model to generate concise and accurate descriptions of images, figures, and diagrams. The output of this process is a textual description of each image.
+
+The fourth skill then takes these verbalized image descriptions and generates vector embeddings for them using the same embedding model. Additionally, the skillset includes metadata that connects all of this to the underlying Cognitive Services, such as OCR and computer vision services. These connections ensure that all AI enrichment happens seamlessly behind the scenes.
+
+If we go back to the Data Sources section, we can see a connection to the Azure Storage account. This connection points to the foundry-iq-docs container, which is where the documents are stored. This is how the entire indexing pipeline is wired end to end.
+
+Now that the knowledge base and indexing pipeline are in place, let’s create an agent on top of it. I’ll navigate to the Agents section and click Create Agent. I’ll name this agent Foundry IQ Agent – GUI, since it’s being created through the Foundry Portal UI. In the next video, we’ll do the same thing using a code-first approach.
+
+I’ll select GPT-4 as the model and provide system instructions stating that the agent is a helpful AI assistant meant to answer user queries using the Foundry IQ knowledge base provided as a tool. After that, I’ll go to the Knowledge section and attach the Carbon Ops Knowledge Base. Once connected, I’ll save the agent, which creates version two of the agent.
+
+Now let’s test the agent using a complex query. The query asks to combine the SIM Impact Flux Score with the Well-Being Pillars Framework to propose a proprietary Carbon Ops metric that quantifies how employee well-being influences ESG impact severity. It also asks for a formula, required inputs from ACES metadata, and a sample calculation.
+
+This is a highly complex query involving multiple documents and concepts. When I submit the query, the agent computes three retrieval queries and executes them in parallel across the knowledge base and all connected knowledge sources. After approving the execution, the agent returns a detailed response very quickly.
+
+The response proposes a metric called the Employee Well-Being Impact Severity Index, defines a formula, lists required metadata inputs from the sustainability evidence schema, and even generates a sample calculation. This level of synthesis is impressive and shows how the agent can create entirely new frameworks based on grounded knowledge.
+
+The response used 1,698 tokens. If you look at the tool used, it references an MCP server rather than explicitly stating “knowledge base.” This is because the agent accesses the knowledge base through the Azure AI Search MCP server. Debug mode confirms this by showing the conversation ID and the MCP tool call, which points directly to the knowledge base.
+
+Next, I update the system prompt to instruct the agent to also include document names and URLs used as sources. After saving and starting a new conversation, I test it with a simpler query about Carbon Ops ESG frameworks. The agent again executes three queries in parallel. Although it still doesn’t return full URLs, it does identify the source documents by name, such as Overview of CIM IAM Framework and SDGs Framework Principles. These are the exact documents uploaded to Azure Blob Storage.
+
+Now, let’s test SharePoint-based retrieval. I ask the agent about the Carbon Ops Employee Well-Being Framework. The agent runs three queries against the SharePoint knowledge source and returns detailed information about pillars such as energy balance, purpose, recharge leave, anti-burnout reset, family connectors, and the Well-Being Score Restoration Threshold Indicator.
+
+To validate this, I open the SharePoint document directly, and the information matches perfectly. The agent is clearly grounding its response from the SharePoint source.
+
+Finally, I test one last query related to the Carbon Ops Global Remote Work and Flexibility Policy. The agent retrieves information about purpose and principles, the flex-mode working model, flex core hours, flex location zones, output commitments, and remote work tiers such as hybrid, remote-plus, and fully distributed. It also includes communication protocols like green zone hours, red zone hours, dark mode, and asynchronous updates.
+
+Verifying this against the SharePoint document confirms that the content is accurate and even preserves the structure of tables and layouts, resulting in well-formatted responses.
+
+With this, we’ve successfully created a Foundry IQ agent grounded in a knowledge base that pulls information from both Azure Blob Storage and SharePoint using a remote configuration. That concludes everything covered in this video. Without further ado, let’s move on to the next set of videos.
+
 # **F) Lab: Creating Foundry IQ Agent via Python Notebook (Hands-On Lab)**
+
+In this video, we focus on creating a Foundry IQ–grounded Foundry agent using a code-first approach. Instead of using the Foundry portal UI, we build and interact with the agent programmatically. I start by opening the GitHub repository that contains the Foundry IQ codebase. Inside this repository, I work within the notebook named foundry_iq.ipynb, which is where all the code execution takes place.
+
+Before executing any code, the first critical step is configuring the required environment variables. These include the project endpoint, model deployment name, search service endpoint, knowledge base name, and the search service project connection name. These values are mandatory for the agent to connect correctly to Foundry, Azure AI Search, and the knowledge base.
+
+To begin, I navigate to the Foundry home tab, copy the project endpoint, and paste it into the environment variable file. Next, I specify the model deployment name. Since I already have a GPT-4 model deployed, the deployment name is simply GPT-4.
+
+After that, I retrieve the search service endpoint. To do this, I open the Azure AI Search resource in the Azure portal and navigate to the Overview section (not the Keys section). The endpoint URL displayed there is copied and pasted into the corresponding environment variable.
+
+Next, I need the knowledge base name. I return to the Foundry portal, go to the Build → Knowledge section, and copy the knowledge base name, which in this case is Carbon Ops Knowledge Base. This value is also added to the environment variables.
+
+The final and most important variable is the search service project connection name. To obtain this, I go to the Operate → Admin section in Foundry and open Connected Resources. Here, I initially copy the connection name related to the AI Search service. However, it is important to pay close attention at this step because there are multiple connection names, and selecting the wrong one can cause errors later.
+
+After saving the environment variables, I proceed to execute the Python notebook. The first few cells set up the environment variables and initialize the required clients. At this stage, I also construct the MCP endpoint. As discussed earlier, the agent connects to the knowledge base via the Azure AI Search MCP server. The MCP endpoint is constructed using the following structure:
+<search-service-endpoint>/knowledgebases/<knowledge-base-name>/mcp.
+
+Next, I initialize the Foundry project client, which connects to the Foundry resource, and the OpenAI client, which is used to send queries to the agent. Using the project client, I list all connected resources and search for the connection that matches the provided project connection name. Once found, I extract and store the connection ID in a Python variable. This connection ID is required to authenticate MCP tool calls.
+
+With the connection ID available, I create the MCP knowledge base tool. The server label is set to the knowledge base name, and the server URL is the MCP endpoint constructed earlier. The require_approval flag is set to never, so the agent does not ask for approval before executing retrieval queries. The allowed tool is knowledge base retrieve, and the project connection ID is provided to complete the configuration.
+
+After configuring the MCP tool, I define the agent system prompt. In this prompt, I instruct the agent to act as a helpful assistant that must answer all user questions strictly using the provided knowledge base. At the end of every response, the agent should list all document URLs used as grounding sources. If the answer cannot be found in the knowledge base, the agent must explicitly respond with “I don’t know.”
+
+With the system prompt ready, I create the agent and name it KB Code Agent. In the agent definition, I provide the model deployment name, the system instructions, and the MCP tool that connects the agent to the knowledge base. Once executed, this registers the agent within Foundry.
+
+To interact with the agent, I create a conversation object, which returns a conversation ID. This ID allows contextual continuity across multiple turns of conversation. I then send a user query to the agent using the OpenAI client.
+
+The query asks the agent to list all proprietary carbon scoring elements from SIM, RS, and well-being documents, classify them into metrics, validation factors, and behavioral indicators, and explain how these categories interact during an AI-driven ESG assessment. This query requires information from both Azure Blob Storage documents and SharePoint-based HR documents.
+
+At this point, I encounter an error. Upon investigation, I realize that I mistakenly used the search service connection name instead of the knowledge base connection name. This mistake prevents the agent from accessing the knowledge base correctly. I intentionally do not cut this part from the video because it highlights a very realistic issue that can occur when building systems like this.
+
+To fix the issue, I return to Operate → Admin → Connected Resources and copy the knowledge base connection name instead of the search service connection name. After updating the environment variable, I save the file, restart the Python kernel, and rerun the notebook from the beginning.
+
+This time, when listing connections, the correct knowledge base connection ID is retrieved. I recreate the MCP tool, redefine the system prompt, and recreate the agent. Since the agent already exists, Foundry automatically creates version two of the agent. I then recreate the conversation object and resend the user query.
+
+This time, the agent successfully returns a detailed response. The output includes scoring elements from the Carbon Ops ESG Intelligence Model, such as system boundary confidence, impact flux score, operational materiality threshold, and stakeholder heat vector. To verify correctness, I manually open the Carbon Ops Intelligence Model PDF from the Blob Storage folder and confirm that all these elements are indeed present.
+
+The agent also references elements from the Sustainability Evidence Schema, including activity evidence, measurement evidence, evidence statements, and evidence verification. Again, I cross-check this information against the second PDF document in Blob Storage and confirm its accuracy.
+
+At the end of the response, the agent includes a list of source documents. However, it only references the Carbon Ops ESG Intelligence Model and does not include the Sustainability Evidence Schema document. This highlights an area for improvement, particularly around traceability and grounding transparency, which are critical principles in responsible AI systems.
+
+With that, the video concludes. We have successfully created a Foundry IQ–grounded agent using a code-first approach, connected it to a knowledge base via an MCP server, handled configuration errors, and validated the agent’s responses against the original source documents. In the next set of videos, we’ll continue building on this foundation and explore further enhancements.
