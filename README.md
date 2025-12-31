@@ -107,6 +107,16 @@ This Repository contains my "Microsoft Foundry: AI Agents, Foundry IQ, MCP &amp;
 
 **E) Lab: Invoice Analysis Lab (Hands-On Lab)**
 
+**VIII) Agent Orchestration Workflows**
+
+**A) What are Orchestration Workflows in Microsoft Foundry?**
+
+**B) Lab: Building a MS Learn Path Builder - Sequential Workflow (Hands-On Lab)**
+
+**C) Lab: Building a Human-In-The-Loop Workflow (Hands-On Lab)**
+
+**D) Lab: Building an Agent Chat System Workflow (Hands-On Lab)**
+
 
 
 
@@ -2102,3 +2112,240 @@ Because the Foundry agent has access to a code interpreter tool, it takes the st
 This entire demo showcases how generative AI (Foundry agents) works together with predictive AI services like Azure Document Intelligence and Azure AI Language Service to bring an end-to-end intelligent workflow to life.
 
 # **E) Lab: Invoice Analysis Lab (Hands-On Lab)**
+
+With this video, we perform a lab that involves using the PII text detection capability of Azure Language Service along with the invoice processing capability of Azure Document Intelligence to build a Foundry agent. This agent is capable of creating a chart where the invoice total is displayed on the Y axis and the invoice names are shown on the X axis.
+
+The overall flow of this lab is as follows. We start with a set of invoices, which are sent to the Azure Document Intelligence resource. This service captures the layout and overall structure of the invoices and performs a metadata-level analysis on them. The descriptive fields extracted from the invoices are then sent to Azure Language Service, where personally identifiable information is identified and replaced with asterisks. The redacted information is subsequently sent to a Foundry agent, which can then use the code interpreter tool to generate Python code and execute it in a sandbox environment to create a column chart with invoice totals on the Y axis and invoice names on the X axis.
+
+To perform this lab, the working directory is the multi-modal-labs folder. Inside this folder, there is a subfolder named invoice-extraction, which contains the Python notebook holding the main codebase and an environment variable file where all required environment variables must be populated.
+
+There are three invoices used in this lab, provided as image files named invoice1.jpg, invoice2.jpg, and invoice3.jpg. Each of these represents a typical invoice use case from a German company and is written in German. The invoices contain customer names, vendor names, addresses, and a tabular structure that needs to be preserved and analyzed using Azure Document Intelligence. All three invoices follow a similar format, and the objective is to analyze them and generate a column chart using the subtotal values on the Y axis and the invoice names on the X axis.
+
+The environment variable file requires several values to be filled in, including the Foundry project endpoint, the model deployment name used to create the agent, the Azure Language endpoint and API key, and the Azure Document Intelligence endpoint and API key. An Azure Language resource was already deployed in a previous lab and is connected to the Foundry project as an external API connection. By navigating to the Operate section and then Admin within the Foundry portal, the connected Azure Language resource can be viewed under Connected Resources. The API key and endpoint for this resource are copied and added to the environment variable file.
+
+Next, the Foundry project endpoint and the model deployment name are collected. The deployment used for creating the agent is GPT-4. After that, an Azure Document Intelligence resource needs to be deployed from the Azure portal. This resource is created in the same resource group, Foundry Demo RG, using the Sweden Central region. A suitable name is assigned, and the free pricing tier is selected, which allows 500 pages per month and supports the recognizer API. Only the recognizer API is required since the prebuilt invoice model is being used. Default settings are kept for networking, identity, and tags, and the resource is created after validation.
+
+Once the Document Intelligence resource is deployed, its endpoint and API key are retrieved from the Keys and Endpoint section. An API key–based connection is then created in the Foundry portal by clicking Add Connection and selecting API key. The API key and endpoint are provided, and the connection is named Document Intelligence Resource. After connecting, the resource appears under Connected Resources, confirming that the setup is successful. The API key and endpoint are then copied into the environment variable file. At this point, all required environment variables are filled, and the changes are saved.
+
+The lab begins by loading the environment variables and extracting the Foundry project endpoint, deployment name, Azure Language endpoint and API key, and Document Intelligence endpoint and API key. A Foundry project client is created to establish a connection with the Foundry portal, along with an OpenAI client to communicate with the agent.
+
+A Text Analytics client is then created using the Azure Language endpoint and API key. This client enables calls to the text redaction API provided by Azure Language Service. A function is defined to perform text redaction, which takes input text and calls the PII entity recognition API with the language set to English. Although the invoices themselves are in German, the extracted key-value fields from Azure Document Intelligence, such as vendor name and merchant address, are returned in English. This is why the language parameter is set to English. The function stores the redacted text in a Python variable and also prints details about the detected entities, including category, confidence score, offset, and length.
+
+Next, a Document Intelligence client is created using the endpoint and API key. A document analysis function is defined that takes invoice URLs as input. The invoices are stored in a GitHub repository, and each invoice image has a corresponding raw GitHub URL, which is publicly accessible. These raw URLs are passed into the analyze invoice function. The function uses the begin_analyze_document method with the prebuilt invoice analysis model and waits for the analysis to complete using a polling mechanism.
+
+Once the analysis is complete, the function extracts values such as vendor name, vendor address, vendor address recipient, and other invoice-related fields for each invoice. All these values are concatenated into a single string called the final response. Since this response contains personally identifiable information such as customer names and addresses, it is passed to the text redaction function created earlier so that all PII is masked.
+
+An agent is then created with code interpreter capabilities. The agent is named Invoice Analysis Agent and is based on the GPT-4 model. The system prompt specifies that the agent is a helpful AI assistant with code interpreter capabilities, and a sandbox container is provided so that it can execute Python code. Once created, the agent is assigned an ID and version. A conversation object is then created using the OpenAI client, which provides a conversation ID for interacting with the agent.
+
+At this stage, everything is combined into a single pipeline. A function named analyze_invoices_in_bulk is created. This function iterates over the list of invoice URLs stored in the GitHub repository. For each URL, it first calls the Document Intelligence invoice analysis function and then passes the extracted output to the PII text redaction function. The redacted output for each invoice is appended to a Python string variable called final response string. This string contains redacted information from all three invoices combined.
+
+Once the final redacted response string is ready, the agent is called using the OpenAI client responses API and the conversation ID. The user query asks the agent to create a chart with the invoice total on the Y axis and the invoice names on the X axis, followed by the redacted information extracted from the invoices. The agent processes this input and generates a response.
+
+The response includes output from the Document Intelligence prebuilt invoice analysis API, showing detected entities such as vendor names categorized as organizations with high confidence scores, as well as addresses categorized appropriately. The redacted text is then passed to the agent, which generates Python code to create the column chart. The generated chart is stored as a file associated with a file ID, file name, and container ID.
+
+Additional code is executed to extract the file ID, file name, and container ID from the response. The file is opened in read and write mode, its contents are read, and the file is downloaded and saved locally as an image. The resulting chart shows invoice one with a total close to €100, invoice two close to €400, and invoice three close to €110.
+
+To verify accuracy, the original invoice images are checked. Invoice one has a total of approximately €87.67, invoice two around €407, and invoice three around €105.91. These values match the chart, confirming that the extraction and visualization are correct.
+
+Before closing the lab, the redacted text is also reviewed in the Foundry agent interface. By navigating to the agent and opening the Traces section, the conversation metadata can be inspected. The input shows the user query along with the redacted invoice information. Vendor names, vendor addresses, customer names, and customer addresses are all replaced with asterisks, while only the invoice totals remain visible. This confirms that the agent receives only non-PII numerical values and not sensitive information.
+
+This concludes the lab workflow demonstrated in the video, showcasing how Azure Document Intelligence and Azure Language Service can be combined to build a secure and privacy-aware multimodal AI use case where predictive AI and generative AI work together. With that, the lab is complete, and we move on to the next set of videos.
+
+# **VIII) Agent Orchestration Workflows**
+
+# **A) What are Orchestration Workflows in Microsoft Foundry?**
+
+With this video, we are beginning a new section of the course, or rather a new module, where the focus is on something called a multi-agent orchestration workflow built in a low-code manner using Microsoft Foundry. As you might expect, this approach is completely low code, which is what makes it especially exciting. It enables citizen developers and business users to build systems at scale, while also acting as a handoff point to developers who can take these ideas further and productionize them.
+
+The idea here is that business users can create low-code orchestration workflows directly in Microsoft Foundry and then hand over the work to developers who can handle the heavy lifting required to build and scale these systems. When navigating to the Build area and then to Workflows, you land on a page where multiple workflows may already exist. This video serves as an introductory overview to explain the concept behind these workflows and what to expect from the demos included in this module of the course.
+
+The first workflow explored is a sequentially oriented workflow that follows a very systematic order. This workflow is designed to build an entire Microsoft Learn training pipeline for a user based on their experience level and their goals, such as becoming an AI engineer within a certain timeframe like two or three months. Based on these inputs, the workflow generates a personalized study planner tailored to the user’s needs.
+
+This workflow consists of multiple agents arranged in sequence, such as agent one, agent two, and agent three. In addition to these agents, there is a human-in-the-loop component where the user is asked whether they are satisfied with the generated result. Based on the user’s response, an if-else condition determines whether the workflow should rerun with feedback incorporated or whether it should terminate. This demonstrates how low-code workflows can integrate agents and human feedback seamlessly, simply by assembling agents that can even be created directly within the Foundry portal.
+
+From a broader perspective, there are two main ways to think about the use of these workflows. The first is that once a workflow is built and published, it can be called programmatically. By navigating to the code section, you can access the Python code required to invoke the entire workflow from an application. In this sense, the workflow itself can be treated as an AI microservice that becomes part of a larger AI ecosystem or application.
+
+The second major use case is developing proofs of concept. With the rise of AI agents and agent-based systems, domain knowledge has become increasingly important. This domain knowledge typically resides with business users who face these business problems on a daily basis and understand them better than anyone else. Because these orchestration workflows are low code and relatively simple to build, they provide an ideal starting point for business users to create proofs of concept and iterate on ideas quickly.
+
+Once business users are confident that a particular idea is valuable, they can hand over the proof of concept to developers. Developers can then rebuild or scale the solution using more advanced technologies such as Docker container apps or the Microsoft Agent Framework. In this way, these workflows act as a bridge between domain experts who may not be deeply technical and developers who are highly skilled with modern technologies but may lack deep domain context.
+
+In addition to the sequential workflow, another example shown is an agent chat workflow. In this type of workflow, agents are able to communicate with each other and engage in their own feedback loop. For example, one agent might generate a recipe, while another agent acts as a judge. If the judge agent is not satisfied with the recipe, it provides feedback to the recipe agent. The recipe agent then revises its output based on that feedback. This loop continues until the judge agent is satisfied, at which point the workflow ends.
+
+These two workflows—a sequential workflow with human-in-the-loop interaction and an agent chat workflow with internal feedback—are exactly what will be built as part of the hands-on labs in this module of the course. This sets the foundation for understanding how multi-agent orchestration workflows can be designed and used effectively.
+
+Overall, this video is meant to give a clear idea of what will be covered in the upcoming lessons and how these workflows can be applied in day-to-day scenarios to solve business problems at scale. With that introduction complete, we can now move on to the next set of videos.
+
+# **B) Lab: Building a MS Learn Path Builder - Sequential Workflow (Hands-On Lab)**
+
+With this video, we’ll be building a sequential orchestration workflow that acts as an MS Learn path builder using the Microsoft Foundry ecosystem.
+
+The instruction file for this lab is sequential_workflow.md, which is located inside the sequential workflow folder. That folder itself sits under the multi-agent workflows parent directory in the repository you are currently exploring. This instruction file contains all the steps and prompts required to complete this lab.
+
+Let’s first understand what this workflow is going to do. The workflow involves three agents. The first is the Topic Builder Agent, the second is the MS Learn Module Picker Agent, and the third is the Study Plan Generator Agent.
+
+Whenever a user submits a query—for example, “I want to become an Azure AI Engineer in six weeks, and I already know Python and how to make REST API calls. Suggest me a learning path for this timeline”—the query is first passed to the Topic Builder Agent. This agent analyzes the user’s goal, considers the technologies the user already knows, and then suggests relevant topics and keywords from the Azure AI ecosystem that the user should learn to become an Azure AI Engineer.
+
+The output generated by the Topic Builder Agent is then passed to the MS Learn Module Picker Agent. This agent takes the suggested topics and performs a web search to retrieve documentation links and Microsoft Learn training modules related to those topics. The agent has access to a web search tool, which allows it to search across the internet and, more specifically, the Microsoft Learn website.
+
+Once the MS Learn Module Picker Agent completes its task, its output is passed to the Study Plan Generator Agent. This final agent takes the user’s original goal, the timeline (for example, six weeks), and the curated Microsoft Learn modules, and then generates a complete study plan. The output typically looks like a week-by-week breakdown—for example, what to study in week one, week two, week three, and so on—ending with a recommendation to take the Azure AI Engineer Associate certification exam in the final week.
+
+With that overview in mind, let’s start building the workflow.
+
+I’m now in the Microsoft Foundry portal, under the Build section, inside the Workflows area. I click on Create and choose to start with a Blank Workflow. Although Foundry provides templated workflows like Sequential, Human-in-the-Loop, and Group Chat, we’ll start from scratch since we already have clear instructions.
+
+Once the blank workflow opens, the first thing I do is click Add and select Set Variable. I create a new variable and name it local.user_query.
+
+Before setting the value, it’s important to understand the system variables available in the workflow. These variables operate at the system level and include details such as the current activity state, the conversation ID generated when the workflow runs, the stack trace for the entire workflow execution, and metadata like the local time zone of the conversation.
+
+Now, I set the value of local.user_query to system.lastMessage. Everything you type in the value field uses Power FX expressions. If you’ve worked with Power Automate or the Power Platform, this will feel familiar. However, even if you haven’t, there’s no need to deeply learn Power FX. Tools like ChatGPT or Copilot can help you generate these expressions. In fact, even I rely on AI assistance for this because I don’t regularly work with Power Platform or Power FX, and that’s completely fine.
+
+The system.lastMessage variable always stores the most recent message in the workflow. When an agent runs and produces output, that output becomes the value of system.lastMessage. This variable operates at the workflow level and is essential for passing outputs between agents.
+
+Next, I add a new action and select Invoke Agent. I name this agent Topics Builder Agent. Since this agent doesn’t exist yet in the Foundry ecosystem, I click Create New Agent, which automatically creates it and makes it visible in the Agents section. I confirm the name as Topics Builder Agent and proceed.
+
+For this agent, I don’t add any tools, plugins, or knowledge bases. I simply configure the system prompt. The agent uses a GPT-4 model, though you can choose a different model if you wish. The system prompt clearly defines the agent’s role as the first step in a sequential workflow, instructing it to analyze the user’s learning goal and output a structured list of topics and subtopics in a predefined format.
+
+Once the prompt is set, I click Done.
+
+The next agent in the workflow is the MS Learn Module Picker Agent. I again add an Invoke Agent action, name it accordingly, and create a new agent with the same name in the agent service.
+
+This agent is also based on GPT-4, but unlike the first agent, it is given access to a Web Search tool. Its system prompt instructs it to take the structured topics generated by the Topic Builder Agent and map them to relevant Microsoft Learn modules, learning paths, and units. The expected output includes module names, URLs, and brief descriptions.
+
+In the action settings, the input message is set to system.lastMessage, which corresponds to the output of the Topic Builder Agent. There’s no need to store the output explicitly because it is automatically saved back into system.lastMessage.
+
+At one point, an error appears indicating that the variable may not have been created properly. To resolve this, I simply recreate the variable local.user_query and set its value again to system.lastMessage. After doing this, the error is resolved.
+
+The third and final agent is the Study Plan Generator Agent. I create another Invoke Agent action and create a new agent with this name. This agent also uses GPT-4 and does not require any tools or knowledge bases.
+
+Its system prompt defines it as the third step in the workflow. It receives curated Microsoft Learn modules along with URLs, descriptions, subtopic mappings, and the user’s timeline. Its task is to generate a realistic, achievable, week-by-week study plan, factoring in available study time, model complexity, and learning depth. The output must be clean, structured, and human-friendly.
+
+After configuring the agent, I end the workflow and save it with the name MS Learn Path Builder Workflow.
+
+Once saved, I click Preview to test the workflow. I enter a sample query:
+“I want to become an Azure AI Engineer in three months. I know basic Python and I’ve used Azure VMs before. I can study around 8 to 10 hours every week.”
+
+The workflow runs, and first the Topic Builder Agent generates a list of relevant Azure AI topics. This output then becomes the input for the MS Learn Module Picker Agent, which performs a web search and retrieves Microsoft Learn modules. You can see the web search activity happening in real time on the right-hand side of the screen.
+
+Finally, the Study Plan Generator Agent produces a complete three-month study plan. I copy the output into a Word document and also view it as a Markdown file in VS Code using preview mode. The plan is clearly structured, showing month-by-month and week-by-week learning goals.
+
+Some of the Microsoft Learn links may not open correctly. This happens because certain modules may have been removed by Microsoft but are still indexed by search engines. Even so, the workflow successfully performs the web search and retrieves valid modules where available.
+
+What’s impressive here is that we started with a simple 5–6 line user query and ended up with a detailed, personalized learning roadmap. This is a real-world use case that many learners struggle with—finding the right Microsoft Learn modules without spending hours researching.
+
+Finally, by navigating to the Traces section, we can see the complete execution trace. This includes the conversation ID, the sequence of agent invocations, tool usage, errors (if any), and total token consumption. In this run, the total number of tokens consumed was around 9,861.
+
+You can try other sample queries provided in the instruction file, such as learning data engineering from scratch or switching careers into cybersecurity as a SOC analyst.
+
+In the next video, we’ll enhance this workflow by adding a Human-in-the-Loop component, allowing users to provide feedback and influence whether the workflow reruns or terminates.
+
+# **C) Lab: Building a Human-In-The-Loop Workflow (Hands-On Lab)**
+
+With this lab, we are going to build a Human-in-the-Loop system inside the sequential workflow for the MS Learn Path Builder that we created in one of the previous labs. By the end of this lab, the workflow will allow users to review the AI-generated study plan, provide feedback, and have the workflow intelligently rerun based on that feedback instead of terminating immediately.
+
+To understand the problem we are solving, let’s look at the existing sequential workflow. When the workflow runs for the first time, the agents execute in sequence and finally the Study Plan Generator Agent produces a complete study plan. However, in many real-world scenarios, the user may not be happy with this first output. For example, the user may want something more beginner-friendly or, on the other hand, more advanced and expert-level. Without a feedback mechanism, the workflow ends even if the output is not satisfactory.
+
+The challenge, therefore, is to build a feedback loop that allows the user to provide input again, trigger an if-else condition, and route the workflow back to the beginning—specifically to the Topics Builder Agent—while preserving the user’s feedback as context. This is exactly what we aim to achieve using the Human-in-the-Loop framework in this lab.
+
+Using the reference diagram for this workflow, we start by modifying the sequential workflow. Immediately after the Study Plan Generator Agent and before the workflow ends, we add a new action. This action is an Ask a Question node. This node is responsible for asking the user whether they are satisfied with the generated study plan.
+
+The question we configure is:
+“Are you happy with the answer? Please answer in yes or no.”
+The expected input type is set to strict string, and the user’s response is stored in a new variable called local.user_approval. If the variable does not already exist, we create it at this point and then click Done to save the configuration.
+
+Once this question is added, the next step is to introduce an If-Else condition. This condition evaluates the value of the local.user_approval variable. If the value evaluates to “yes”, it means the user is satisfied and the workflow should end normally. If the value evaluates to “no”, the workflow should not end. Instead, it should collect feedback from the user and rerun the workflow.
+
+For the If condition, we configure the expression as:
+local.user_approval = "no"
+This ensures that the feedback loop is triggered only when the user explicitly indicates dissatisfaction.
+
+Inside the If branch, we add another Ask a Question action. This time, the question is:
+“Please tell us what you would like to change.”
+The user’s response is stored in the variable local.user_query, which already exists in the workflow and was used earlier to capture the original user request. By storing the feedback in this variable, we ensure that the updated context is passed back to the agents.
+
+After capturing the feedback, we add a Go To action. This Go To action routes the workflow back to the Invoke Agent node corresponding to the Topics Builder Agent. Once this is configured and saved, the workflow is capable of looping back to the beginning, now enriched with the user’s feedback.
+
+At this point, the Human-in-the-Loop sequential workflow is complete. The logic is straightforward:
+
+Ask the user if they like the response
+
+If the answer is no, ask what they want to change, update the context, and rerun the workflow
+
+If the answer is yes, terminate the workflow
+
+We then save the workflow. This creates a new version (V2) of the workflow, similar to how new versions are created when updating an agent.
+
+Next, we test the workflow in action. We run the same query as before:
+“I want to become an Azure AI engineer in three months. I know basic Python and I’ve used Azure VMs. I can study around 8 to 10 hours every week.”
+We open the Preview window and send the query.
+
+As expected, the Topics Builder Agent is triggered first. Shortly after, the Learn Module Picker Agent executes and performs a web search to fetch relevant Microsoft Learn modules. Finally, the Study Plan Generator Agent produces a week-by-week study plan covering weeks one, two, three, and beyond.
+
+Once the plan is generated, the user is asked:
+“Are you happy with the answer? Please answer in yes or no.”
+
+We respond with “No”, indicating dissatisfaction. This immediately triggers the If condition. The workflow then asks a second question:
+“Please tell us what you would like to change.”
+
+We provide the feedback:
+“Please make the study plan more beginner friendly. I don’t really have any experience with the Azure platform, so please take that into consideration and start right from scratch.”
+After submitting this feedback, the Go To action is triggered, and the workflow routes back to the Topics Builder Agent.
+
+This time, the agent takes into account the new context—that the user is a complete beginner in both Azure AI and the Azure platform in general. Based on this updated information, the agents generate a new learning path starting from the fundamentals.
+
+A new response is generated, and again the workflow asks whether the user is happy with the answer. We respond with “Yes”, which triggers the Else branch and allows the workflow to complete.
+
+To validate the output, we copy the response, paste it into a Markdown file, and preview it. The response clearly states that it is a structured, beginner-friendly three-month study plan, starting from foundational cloud and Azure concepts and gradually progressing to more advanced topics. Week one focuses on Azure fundamentals and cloud computing basics, followed by core Azure services, networking, databases, Azure AI, DevOps, governance, monitoring, and finally certification preparation and real-world applications.
+
+This confirms that the Human-in-the-Loop mechanism worked exactly as intended. The workflow successfully captured user feedback, preserved context, reran the agents, and produced a significantly improved and more relevant output.
+
+With this, we have successfully implemented a Human-in-the-Loop framework inside a sequential workflow using Microsoft Foundry. This is a powerful pattern for building real-world AI systems where user feedback, iteration, and refinement are critical.
+
+# **D) Lab: Building an Agent Chat System Workflow (Hands-On Lab)**
+
+With this video, we are going to create a new agent chat system workflow using the Foundry Orchestration Workflow toolset available in the Foundry portal. The objective of this lab is to demonstrate how multiple agents can communicate with each other, evaluate each other’s outputs, and iteratively improve results using conditional logic and feedback loops.
+
+The core idea behind this workflow is simple. By the end, we want a system that looks like a two-agent chat workflow. The first agent is a Recipe Agent, and the second agent is a Judge Agent. The Recipe Agent takes the user’s input, which might be something like “I want to make a dish using these ingredients”, and proposes a recipe. This proposed recipe is then passed to the Judge Agent, which evaluates the recipe against a predefined set of criteria.
+
+Once the Judge Agent evaluates the recipe, an if–else condition determines the next step. If the Judge Agent responds with the string “approved”, the orchestration workflow completes successfully. However, if the Judge Agent is not satisfied with the recipe, the else condition is triggered. In that case, a Go To action routes the request back to the Recipe Agent along with feedback from the Judge Agent. This loop continues until the Judge Agent approves the recipe.
+
+To begin this lab, we start from the instruction file named Agent Chat Workflow, located inside the Agent Chat System folder under the Multi-Agent Workflows parent folder. From there, we navigate to the Foundry portal, click on Create, and select Blank Workflow to build everything from scratch.
+
+At the end of this process, the workflow should visually resemble the reference diagram provided. The first step is to add a Set Variable action. We click on Add New Node and select Set Variable. We create a new variable named local.last_message, and set its value to system.last_message.text. This extracts the text content of the user’s most recent message.
+
+It’s important to understand why this step exists. The orchestration system internally maintains two types of messages: assistant messages and user messages. The user query we care about is stored inside the system’s last message object. By extracting the text field, we capture the user’s actual input and store it in a reusable variable.
+
+Next, we add an Invoke Agent action. This agent will be the Recipe Agent, so we proceed to create a new agent named Recipe Agent and select the GPT-4 model. Once the agent is created, we configure its system prompt.
+
+The system prompt for the Recipe Agent is intentionally simple but very specific. The agent is instructed that its role is to propose a simple recipe. Whenever it receives a food item or ingredient—either from the user or from feedback—it must generate one quick recipe using that item. The recipe must be short, limited to three to four steps, and the agent must not judge the food, ask questions, or provide commentary. After generating the recipe, the agent must stop and wait for further input.
+
+In the Action Settings for the Recipe Agent, the input message is set to local.last_message, and the agent’s output is also saved back into local.last_message. This allows the output to be passed seamlessly to the next step in the workflow. Once this configuration is complete, we save the action.
+
+The next step is to create the Judge Agent. We create a new agent named Judge Agent, again using the GPT-4 model. The system prompt for this agent is more detailed because it includes a scoring framework.
+
+The Judge Agent’s job is to evaluate the recipe generated by the Recipe Agent using four criteria: clarity, feasibility, completeness, and creativity. The maximum score is ten points. Clarity and feasibility are scored out of three points each, completeness out of two points, and creativity out of two points.
+
+The decision rules are clearly defined. If the total score is greater than or equal to seven, the Judge Agent must respond with “approved” along with a brief explanation. If the score is less than seven, the Judge Agent must respond with “fix”, explain why the recipe is insufficient, and provide actionable feedback on how the Recipe Agent can improve the recipe. The Judge Agent is explicitly instructed never to create or modify recipes—its role is purely evaluative.
+
+After configuring the system prompt, we move back to the workflow and add another Invoke Agent action for the Judge Agent. Just like before, the input message is local.last_message, and the output is saved back to the same variable. Once this is complete, we add an If–Else condition.
+
+The If–Else condition uses a Power FX query. This query first checks that local.last_message is not blank. If it contains text, the condition then searches for the string “[APPROVED]”, converting the text to uppercase to ensure consistency. This logic aligns with the system prompt, where the Judge Agent was instructed to return approval in a standardized format.
+
+If the condition evaluates to true—meaning the recipe is approved—the workflow simply ends. We add an End node and connect it to the If branch. If the condition evaluates to false, we add a Go To action in the Else branch. This Go To action routes execution back to the Recipe Agent, allowing the feedback-driven loop to continue.
+
+At this point, the workflow logic is complete. Most of the effort in building this system goes into two areas: carefully crafting system prompts to control agent behavior, and writing accurate Power FX conditions to manage workflow routing.
+
+We save the workflow and name it Agent System, which creates Version 1 of the workflow. Now we are ready to test it.
+
+We click on Preview and run a sample query such as:
+“Make a quick recipe for bananas.”
+The Recipe Agent generates a simple recipe, which is then evaluated by the Judge Agent. In this case, the Judge Agent assigns a score of 9 out of 10 and approves the recipe. Since approval is received, the workflow completes successfully.
+
+The generated recipe is a simple banana pancake recipe, with clear steps such as mashing a banana, mixing ingredients, cooking on a pan, and serving. The Judge Agent’s score breakdown shows full marks for clarity, feasibility, and completeness, with slightly lower creativity.
+
+To demonstrate a rejection scenario, we attempt to make the Judge Agent more strict. We modify the Judge Agent’s system prompt so that approval is granted only if the score is 10 out of 10, and we instruct the agent to behave like the head chef of a Michelin-star restaurant, emphasizing prestige and high standards.
+
+After updating the system prompt, we test the workflow again with various ingredient combinations. Although it proves difficult to consistently force a rejection using simple ingredients, the workflow itself behaves correctly. Even when approval is granted, the logic flow remains valid, and the feedback loop is ready to activate whenever the Judge Agent returns a “fix” decision.
+
+Despite not finding a perfect rejection example during the demo, the overall concept and workflow design are sound. The system clearly demonstrates how agent-to-agent communication, evaluation, conditional branching, and iterative improvement can be implemented using Foundry’s orchestration tools.
+
+With that, we conclude this walkthrough of the Agent Chat System Workflow. The key takeaway is how powerful multi-agent orchestration becomes when combined with strong system prompts and conditional logic. Without further ado, we move on to the next set of videos.
